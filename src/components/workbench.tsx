@@ -29,6 +29,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
   desktop?: boolean; onReconnect?: () => void;
   localFolder?: { directory: string; scope: string }; onLocalFolder?: (folder: { directory: string; scope: string }) => void;
 }) {
+  const [choosingFolder, setChoosingFolder] = useState(false);
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const updateState = useSyncExternalStore(appUpdates.subscribe, appUpdates.snapshot, appUpdates.snapshot);
   const local = opened === "local";
@@ -293,7 +294,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
     catch { setError("Kunde inte kontrollera utkasten. Exportera texten innan du loggar ut."); }
   }
   async function chooseLocalFolder() {
-    closing.current = true;
+    closing.current = true; setChoosingFolder(true);
     try {
       await importBarrier.current; await saveBarrier.current;
       await files?.flush(); await store.flush();
@@ -302,7 +303,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
       const folder = await invoke<{ directory: string; scope: string } | null>("choose_local_folder");
       if (folder) onLocalFolder?.(folder);
     } catch (error) { setError(typeof error === "string" ? error : error instanceof Error ? error.message : "Kunde inte byta rotmapp."); }
-    finally { closing.current = false; }
+    finally { closing.current = false; setChoosingFolder(false); }
   }
   async function prepareUpdate() {
     closing.current = true;
@@ -360,7 +361,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
     else if (!local && dirty(draft)) status = "Utkast sparat lokalt · väntar på synk";
     else if (!local && !dirty(draft)) status = draft.savedAt ? `Synkat · Sparat till GitHub ${new Date(draft.savedAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}` : "Hämtat från GitHub";
   }
-  return <div className="workbench">
+  return <div className="workbench" inert={choosingFolder}>
     <aside className={`sidebar ${sidebar ? "mobile-open" : ""}`}>
       <div className="sidebar-brand"><button className="brand text-button" onClick={() => void leave(onHome)}><span className="brand-symbol"><Layers3 size={20} /></span>{sv.name}</button><button className="icon-button mobile-only" onClick={() => setSidebar(false)} aria-label="Stäng navigation"><X size={20} /></button></div>
       <button className="workspace-button" onClick={() => void leave(onWorkspace)}><span className="workspace-icon">{local ? <FileText size={20} /> : <Github size={20} />}</span><span><strong>{local ? "Min lokala skrivyta" : opened.workspace.repository.fullName.split("/")[1]}</strong><small>{local ? "Bara på den här enheten" : `${wiki ? "Wiki" : "Repositoryfiler"} · ${opened.workspace.repository.fullName.split("/")[0]}`}</small></span><ChevronDown size={16} /></button>
