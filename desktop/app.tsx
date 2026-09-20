@@ -17,6 +17,22 @@ type SessionInfo = { user: User | null; localUser?: User | null; configuration: 
 type Device = { userCode: string; interval: number; expiresAt: number };
 export function DesktopApp() {
   const { opened, localUser, restoring, restoreError, restore, open: selectWorkspace, show: setOpened } = useWorkspaceSelection("local");
+  const [localFolder, setLocalFolder] = useState<{ directory: string; scope: string } | null>(null);
+  const [folderError, setFolderError] = useState("");
+  const loadFolder = useCallback(async () => {
+    try { const { invoke } = await import("@tauri-apps/api/core"); setLocalFolder(await invoke("local_folder_info")); setFolderError(""); }
+    catch { setFolderError("Kunde inte läsa rotmappen. Välj mapp igen."); }
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void import("@tauri-apps/api/core").then(({ invoke }) => invoke<{ directory: string; scope: string }>("local_folder_info"))
+      .then(folder => { if (!cancelled) setLocalFolder(folder); })
+      .catch(() => { if (!cancelled) setFolderError("Kunde inte läsa rotmappen. Välj mapp igen."); });
+    return () => { cancelled = true; };
+  }, []);
+  async function recoverFolder() {
+    try { const { invoke } = await import("@tauri-apps/api/core"); const folder = await invoke<{ directory: string; scope: string } | null>("choose_local_folder"); if (folder) { setLocalFolder(folder); setFolderError(""); } } catch { setFolderError("Kunde inte välja rotmapp."); }
+  }
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [connection, setConnection] = useState(false);
   const [picker, setPicker] = useState(false);
@@ -96,7 +112,7 @@ export function DesktopApp() {
   const authenticatedUser = session?.user?.id === localUser?.id ? session?.user : null;
   return <>
     <BackgroundSync user={localUser} activeScope={opened && opened !== "local" ? workspaceKey(opened.workspace) : null} />
-    {restoring || restoreError || !opened ? <WorkspaceRecovery loading={restoring} error={restoreError} onRetry={() => void restore()} onChoose={() => setConnection(true)} /> : <Workbench key={opened === "local" ? "local" : `${localUser?.id}:${workspaceKey(opened.workspace)}`} opened={opened} user={localUser} dark={dark} onTheme={toggleTheme} onHome={() => setOpened("local")} onWorkspace={() => setConnection(true)} onLogout={logout} desktop onReconnect={() => { setConnection(true); void startLogin(); }} />}
+    {!localFolder ? <WorkspaceRecovery loading={!folderError} error={folderError} onRetry={() => void loadFolder()} onChoose={() => void recoverFolder()} /> : restoring || restoreError || !opened ? <WorkspaceRecovery loading={restoring} error={restoreError} onRetry={() => void restore()} onChoose={() => setConnection(true)} /> : <Workbench key={opened === "local" ? localFolder.scope : `${localUser?.id}:${workspaceKey(opened.workspace)}`} opened={opened} user={localUser} dark={dark} onTheme={toggleTheme} onHome={() => setOpened("local")} onWorkspace={() => setConnection(true)} onLogout={logout} desktop localFolder={localFolder} onLocalFolder={setLocalFolder} onReconnect={() => { setConnection(true); void startLogin(); }} />}
     {connection && <Dialog title="Dina arbetsytor" onClose={() => { setConnection(false); void cancelLogin(); }}>
       {settings ? <form onSubmit={event => { event.preventDefault(); void saveSettings(); }}>
         <p>Anslut din GitHub App. Aktivera <strong>Device flow</strong> och ge appen <strong>Contents: read & write</strong>. Installera den på de repositories du vill använda.</p>

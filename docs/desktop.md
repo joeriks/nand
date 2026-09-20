@@ -28,7 +28,7 @@ Repositorymedlemskap verifieras på GitHub inför varje nätverksoperation. Åte
 
 ## Lokal data och stängning
 
-Version 0.3.2 lagrar den lokala samlingen som vanliga `.md`- och `.csv`-filer i användarens Dokument/nand, med **Öppna i Utforskaren** under arbetsytans namn. Windows mappupplösning används även när Dokument är omdirigerad. Befintliga lokala utkast flyttas inte eller raderas: de skrivs till filer och behålls som redigeringsbuffert i IndexedDB. Om en fil med samma namn har annat innehåll visas konflikt utan automatisk överskrivning. Nya/ändrade filer upptäcks vid fokus och ungefär varannan sekund. Extern radering kräver ett granskat beslut innan filen återskapas. Mappen är ännu inte valbar; se README för storleksgränser.
+Version 0.3.2 lagrar den lokala samlingen som vanliga `.md`- och `.csv`-filer i användarens Dokument/nand, med **Öppna i Utforskaren** under arbetsytans namn. Windows mappupplösning används även när Dokument är omdirigerad. Befintliga lokala utkast flyttas inte eller raderas: de skrivs till filer och behålls som redigeringsbuffert i IndexedDB. Om en fil med samma namn har annat innehåll visas konflikt utan automatisk överskrivning. Nya/ändrade filer upptäcks vid fokus och ungefär varannan sekund. Extern radering kräver ett granskat beslut innan filen återskapas. Från 0.3.3 är mappen valbar; se README för storleksgränser.
 
 Lokala skrivningar kontrollerar förväntat innehåll och använder en temporär fil i samma mapp, följt av namnbyte. Nya filnamn skapas utan att ersätta ett befintligt namn. Filsystemet behöver stödja hårda länkar för skapandet (som NTFS); ett fel lämnar utkastet kvar. Ändringar utanför appen kontrolleras igen före ersättning. Det finns ingen gemensam transaktion med andra redigeringsprogram, så samtidiga skrivningar från andra program bör undvikas. Vid skrivfel bevaras utkastet och appens normala stängning visar felet.
 
@@ -54,3 +54,19 @@ CSV-redigeraren använder samma lokala lagring och synkkö. Befintliga CSV-filer
 `npm run test:desktop` bygger samma kod med en unik identifierare under `se.gitbsidian.verification…` och ett separat Cargo-mål under `src-tauri/target/verification`. Datamapp och Credential Manager-tjänst följer appidentifieraren. Testet använder dessutom en ny WebView-profil för varje körning. Alternativa appidentiteter lagrar lokala filer under sin egen appdatamapp, aldrig i användarens Dokument/nand. Den vanliga identifieraren `se.gitbsidian.desktop` och dess befintliga inloggning är oförändrade. Testbygget distribueras inte.
 
 Testet avbryts om verifieringsidentiteten redan har en giltig eller utgången credential. Syntetisk cache används enbart i testprofilen. Inga testkommandon, autentiseringsgenvägar eller simulerade GitHub-svar läggs i produktionsappen. Installationsfilen byggs separat med `npm run desktop:build`.
+
+## Automatiska uppdateringar från 0.3.3
+
+Windows-appen söker efter signerade uppdateringar tio sekunder efter att arbetsytan öppnats och sedan högst var sjätte timme. En ny version visas diskret i toppfältet; en manuell kontroll finns under Fler alternativ → Appuppdateringar. Användaren väljer Uppdatera och starta om. Dialogen blockerar redigering under hämtningen. Import och sparning inväntas, lokala utkast skrivs beständigt och synkprocessen stängs innan installationen startar. Sparfel eller signaturfel stoppar installationen. Installationsfel frigör redigeringen och återaktiverar synkprocessen. GitHub-kön behöver inte vara uppladdad: dess beständiga utkast återupptas efter omstart.
+
+Uppdateraren använder Tauris officiella plugin med TLS och obligatorisk signaturkontroll. Den publika nyckeln ligger i tauri.conf.json. Privat signeringsnyckel ligger endast lokalt i den Git-ignorerade .data/update-signing/nand.key. Säkerhetskopiera den separat; en ersättningsnyckel fungerar inte för redan installerade appar. Nyckeln får aldrig committas eller laddas upp som releasebilaga. Tauri-signaturen är separat från Windows Authenticode; installationsfilen är fortfarande inte Authenticode-signerad.
+
+Bygg signerade releaser med powershell -File scripts/build-update.ps1. TAURI_SIGNING_PRIVATE_KEY kan ange en extern befintlig nyckel. Skriptet skapar installationsfil, .sig, latest.json och SHA256SUMS.txt i releases/vVERSION. Publicera alla fyra som tillgångar i samma stabila GitHub-release; latest.json innehåller en versionslåst URL till installationsfilen. Publicera inte en senare stabil release utan latest.json. Uppdateringsadressen är https://github.com/joeriks/nand/releases/latest/download/latest.json.
+
+Version 0.3.2 saknar uppdateraren och måste uppgraderas manuellt en gång. Funktionen gäller Windows x64; webbversionen och Android har ingen installationsuppdaterare.
+
+## Valbar lokal rotmapp i 0.3.3
+
+Välj rotmapp under Fler alternativ. Mappen väljs med Windows mappdialog och sparas i appens local-folder.json. Varje kanonisk mappsökväg har separat utkast- och anteckningsval i IndexedDB. Standardmappen behåller local-notebook för kompatibilitet. Ett mappbyte kopierar eller flyttar inga filer. Nya tomma valda mappar får ingen automatisk exempelanteckning. En otillgänglig vald mapp återskapas inte; utkasten bevaras tills mappen åter blir tillgänglig eller en annan mapp väljs.
+
+Filanrop från arbetsytan är bundna till dess mappsökväg och avvisas om den sparade rotmappen har bytts. Mappval och filskrivningar delar native-låset. Filer i underkataloger läses med samma gränser och sökvägsskydd som standardmappen. Omläsning sker varannan sekund och vid fokus. Detta är direkt filåtkomst med automatisk sparning, inte en import av hela mappen till en separat databas; IndexedDB används som återställningsbart utkast.

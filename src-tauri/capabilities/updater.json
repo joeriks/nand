@@ -1,0 +1,13 @@
+{
+  "identifier": "desktop-updater",
+  "description": "Signed updates for the desktop application.",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "windows"
+  ],
+  "permissions": [
+    "updater:default"
+  ]
+}

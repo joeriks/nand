@@ -14,7 +14,7 @@ struct ApiResponse { status: u16, data: Value }
 struct BackendResponse { status: u16, data: Value, session: Option<Value>, #[serde(default)] clear_session: bool }
 struct Backend { _child: Child, input: ChildStdin, output: BufReader<ChildStdout> }
 #[derive(Default)]
-struct Runtime { backend: Option<Backend>, session: Option<Value>, loaded: bool }
+struct Runtime { backend: Option<Backend>, session: Option<Value>, loaded: bool, updating: bool }
 #[derive(Default)]
 struct AppState(Mutex<Runtime>);
 
@@ -64,6 +64,7 @@ async fn backend_request(app: tauri::AppHandle, state: State<'_, AppState>, requ
         return Err(error("Ogiltigt appanrop."));
     }
     let mut runtime = state.0.lock().await;
+    if runtime.updating { return Err(error("Appen förbereder en uppdatering. Utkasten finns kvar.")); }
     if !runtime.loaded {
         match credential(&app)?.get_password() {
             Ok(raw) => runtime.session = serde_json::from_str(&raw).ok(),
@@ -103,13 +104,31 @@ async fn export_markdown(app: tauri::AppHandle, name: String, text: String) -> R
     }).await.map_err(|_| error("Kunde inte öppna fildialogen."))?
 }
 
+#[tauri::command]
+async fn prepare_app_update(state: State<'_, AppState>) -> Result<(), String> {
+    let mut runtime = state.0.lock().await;
+    if let Some(backend) = runtime.backend.as_mut() {
+        backend._child.kill().await.map_err(|_| error("Kunde inte stänga synkningen inför uppdateringen."))?;
+    }
+    runtime.backend = None;
+    runtime.updating = true;
+    Ok(())
+}
+
+#[tauri::command]
+async fn resume_after_update_error(state: State<'_, AppState>) -> Result<(), String> {
+    state.0.lock().await.updating = false;
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| { if let Some(window) = app.get_webview_window("main") { let _ = window.unminimize(); let _ = window.set_focus(); } }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![backend_request, export_markdown, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::open_local_folder])
+        .invoke_handler(tauri::generate_handler![backend_request, export_markdown, prepare_app_update, resume_after_update_error, crate::local_files::local_folder_info, crate::local_files::choose_local_folder, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::open_local_folder])
         .run(tauri::generate_context!())
         .expect("Appen kunde inte startas");
 }

@@ -4,7 +4,7 @@ Samla, organisera och redigera din kunskap. En svensk Markdown-skrivyta och CSV-
 
 App- och repositorynamn: **nand**, tills vidare. Repository: [joeriks/nand](https://github.com/joeriks/nand). Namnbytet i 0.3.1 ändrar gränssnitt och produktnamn; interna lagringsnycklar och appidentifierare behålls för befintliga utkast och inloggning.
 
-**Status 0.3.1:** Appen heter nu nand. CSV-redigering med typigenkänning, manuella kolumntyper, felmarkering, filter och sortering ingår. Återöppning av senast aktivt valda arbetsyta/anteckning och tydliga tillstånd för grenhämtning är rättade. Samlingshämtning, lokal åtkomst efter tokenutgång och beständig automatisk synk finns sedan 0.2. Projektgrunden och etapp 1 är implementerade; fullständigt dokumenterat acceptanstest mot riktig GitHub återstår. Etapp 2–5 är inte levererade. Appen är inte fullständigt Obsidian-kompatibel.
+**Status 0.3.3:** Valbar lokal rotmapp med direkt filåtkomst och signerade appuppdateringar finns i Windows-appen. Appen heter nand. CSV-redigering med typigenkänning, manuella kolumntyper, felmarkering, filter och sortering ingår. Återöppning av senast aktivt valda arbetsyta/anteckning och tydliga tillstånd för grenhämtning är rättade. Samlingshämtning, lokal åtkomst efter tokenutgång och beständig automatisk synk finns sedan 0.2. Projektgrunden och etapp 1 är implementerade; fullständigt dokumenterat acceptanstest mot riktig GitHub återstår. Etapp 2–5 är inte levererade. Appen är inte fullständigt Obsidian-kompatibel.
 
 ## Skrivbordsapp med Tauri
 
@@ -33,7 +33,7 @@ Den anslutna arbetsytan har en direktlänk till sitt repository eller sin wiki p
 
 **Importera fil** lägger en UTF-8-fil på högst 1 MiB i den valda arbetsytan: Markdown (`.md`) eller CSV (`.csv`) i lokal skrivyta/repository, och Markdown i Wiki. I repositoryläget används vald gren och undermapp. GitHub-importer går genom den vanliga synkkön; lokala importer stannar i den lokala skrivytan. Ett upptaget filnamn får ett nytt namn, utan att befintlig fil skrivs över. Originalfilen på datorn påverkas inte.
 
-Den lokala mappen är tills vidare fast, inte valbar. Den stöder högst 500 Markdown/CSV-filer och 16 MiB text totalt, med högst 1 MiB per fil. Filer ska vara UTF-8; binär text, otillgängliga filer och överskridna gränser ger ett läs-/sparfel medan utkasten bevaras. `.git`, `.obsidian`, appens temporära filer och symboliska länkar tas inte med. Importen kopierar till nand-mappen, den skapar ingen permanent koppling till originalfilen.
+Från 0.3.3 väljs rotmappen under **Fler alternativ → Välj rotmapp**. Appen minns valet och redigerar filerna direkt i mappen. Befintliga filer flyttas inte vid mappbyte. Den stöder högst 500 Markdown/CSV-filer och 16 MiB text totalt, med högst 1 MiB per fil. Filer ska vara UTF-8; binär text, otillgängliga filer och överskridna gränser ger ett läs-/sparfel medan utkasten bevaras. `.git`, `.obsidian`, appens temporära filer och symboliska länkar tas inte med. Importen kopierar till den valda rotmappen, den skapar ingen permanent koppling till originalfilen.
 
 ## CSV-redigerare
 

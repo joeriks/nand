@@ -1,7 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, io::Write, path::{Component, Path, PathBuf}, sync::Mutex, time::{SystemTime, UNIX_EPOCH}};
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_dialog::DialogExt;
 
 const MAX_BYTES: u64 = 1024 * 1024;
 static FILE_LOCK: Mutex<()> = Mutex::new(());
@@ -12,16 +13,74 @@ pub struct LocalFile { path: String, text: String }
 pub struct Snapshot { directory: String, files: Vec<LocalFile> }
 #[derive(Serialize)]
 pub struct Saved { saved: bool, text: Option<String> }
+#[derive(Serialize, Deserialize)]
+pub struct FolderInfo { directory: String, scope: String }
 
-fn folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+fn default_folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     // Alternate bundle identities must never migrate or write the user's real collection.
     let path = if app.config().identifier == "se.gitbsidian.desktop" {
         app.path().document_dir().map_err(|_| "Kunde inte hitta Dokument-mappen.")?.join("nand")
     } else {
         app.path().app_local_data_dir().map_err(|_| "Kunde inte hitta appens datamapp.")?.join("files")
     };
-    fs::create_dir_all(&path).map_err(|_| "Kunde inte skapa den lokala nand-mappen.")?;
-    path.canonicalize().map_err(|_| "Kunde inte öppna den lokala nand-mappen.".into())
+    Ok(path)
+}
+
+fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app.path().app_local_data_dir().map_err(|_| "Kunde inte hitta appens datamapp.")?.join("local-folder.json"))
+}
+
+fn folder_info(app: &tauri::AppHandle) -> Result<FolderInfo, String> {
+    match fs::read(config_path(app)?) {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|_| "Inställningen för rotmapp kunde inte läsas. Välj rotmapp igen.".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let path = default_folder(app)?;
+            fs::create_dir_all(&path).map_err(|_| "Kunde inte skapa den lokala nand-mappen.")?;
+            let path = path.canonicalize().map_err(|_| "Kunde inte öppna den lokala nand-mappen.")?;
+            Ok(FolderInfo { directory: display_folder(&path), scope: "local-notebook".into() })
+        },
+        Err(_) => Err("Kunde inte läsa den valda rotmappen.".into()),
+    }
+}
+
+fn folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let info = folder_info(app)?;
+    let path = PathBuf::from(info.directory);
+    // Never recreate a missing selected folder (for example a disconnected drive).
+    if info.scope == "local-notebook" { fs::create_dir_all(&path).map_err(|_| "Kunde inte skapa den lokala nand-mappen.")?; }
+    path.canonicalize().map_err(|_| "Rotmappen är inte tillgänglig. Anslut enheten eller välj en annan mapp.".into())
+}
+
+fn check_directory(root: &Path, expected: Option<&str>) -> Result<(), String> {
+    if expected.is_some_and(|value| !display_folder(root).eq_ignore_ascii_case(value)) {
+        return Err("Rotmappen har ändrats. Öppna arbetsytan igen innan du sparar.".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn local_folder_info(app: tauri::AppHandle) -> Result<FolderInfo, String> { folder_info(&app) }
+
+#[tauri::command]
+pub async fn choose_local_folder(app: tauri::AppHandle) -> Result<Option<FolderInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(selected) = app.dialog().file().set_title("Välj rotmapp för lokala filer").blocking_pick_folder() else { return Ok(None); };
+        let path = selected.into_path().map_err(|_| "Ogiltig mapp.")?.canonicalize().map_err(|_| "Kunde inte öppna mappen.")?;
+        if !path.is_dir() { return Err("Välj en mapp.".into()); }
+        let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
+        let mut files = Vec::new();
+        scan(&path, &path, &mut files, &mut 0, &mut HashSet::new())?;
+        let directory = display_folder(&path);
+        let default = default_folder(&app)?;
+        let is_default = default.canonicalize().is_ok_and(|value| value == path);
+        let info = FolderInfo { scope: if is_default { "local-notebook".into() } else { format!("local-folder:{}", directory.to_lowercase()) }, directory };
+        let config = config_path(&app)?;
+        fs::create_dir_all(config.parent().ok_or("Ogiltig inställningsmapp.")?).map_err(|_| "Kunde inte spara mappvalet.")?;
+        let temporary = config.with_extension("tmp");
+        fs::write(&temporary, serde_json::to_vec(&info).map_err(|_| "Kunde inte spara mappvalet.")?).map_err(|_| "Kunde inte spara mappvalet.")?;
+        fs::rename(&temporary, &config).map_err(|_| "Kunde inte spara mappvalet.")?;
+        Ok(Some(info))
+    }).await.map_err(|_| "Kunde inte välja rotmapp.".to_owned())?
 }
 
 fn supported(path: &Path) -> bool {
@@ -122,10 +181,11 @@ fn save(root: &Path, relative: &str, text: &str, expected: Option<&str>) -> Resu
 }
 
 #[tauri::command]
-pub async fn local_snapshot(app: tauri::AppHandle) -> Result<Snapshot, String> {
+pub async fn local_snapshot(app: tauri::AppHandle, directory: Option<String>) -> Result<Snapshot, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
         let root = folder(&app)?;
+        check_directory(&root, directory.as_deref())?;
         let mut files = Vec::new();
         scan(&root, &root, &mut files, &mut 0, &mut HashSet::new())?;
         files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -134,10 +194,12 @@ pub async fn local_snapshot(app: tauri::AppHandle) -> Result<Snapshot, String> {
 }
 
 #[tauri::command]
-pub async fn local_save(app: tauri::AppHandle, path: String, text: String, expected: Option<String>) -> Result<Saved, String> {
+pub async fn local_save(app: tauri::AppHandle, path: String, text: String, expected: Option<String>, directory: Option<String>) -> Result<Saved, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
-        save(&folder(&app)?, &path, &text, expected.as_deref())
+        let root = folder(&app)?;
+        check_directory(&root, directory.as_deref())?;
+        save(&root, &path, &text, expected.as_deref())
     }).await.map_err(|_| "Kunde inte spara den lokala filen.")?
 }
 

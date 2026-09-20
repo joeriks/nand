@@ -1,5 +1,16 @@
 # Verifieringsrapport
 
+## Uppdaterare och valbar rotmapp — 0.3.3, 2026-09-20
+
+Verifierat: Next.js-produktionsbygge/TypeScript, ESLint, 22 enhetstester för uppdateringar/utkast/lokala filer samt 20 Edge-tester för menyer, importer och sparskydd. Windows-regressionen har klarat åtta starter med separat appidentitet, filsystem och WebView-profil, utan console/page errors.
+
+Separata Windows-tester verifierar uppdateringsdialogens tillgänglig/aktuell/offline-tillstånd, blockerad Escape under hämtning, simulerade signatur-/installationsfel och verklig avstängning/återaktivering av appens synkprocess. Uppdaterarens IPC-transport simuleras bara i testfönstret; ingen riktig installation körs. Rapport: artifacts/updater-verification.json.
+
+Rotmappstestet använder två riktiga mappar med samma filnamn: separat innehåll och utkast, skrivning från appen tillbaka till filen, externa ändringar, ny CSV, omladdning, återgång till tidigare mapp samt avvisad sparning med gammal rotsökväg. Testet sätter det sparade mappvalet direkt i testappens inställningsfil; själva Windows mappdialog automatiseras inte. Rapport: artifacts/local-folder-verification.json. Skärmbilderna från båda flödena är granskade.
+
+En tidig Windows-testkörning stängdes utan rapporterat JavaScript-fel. En senare körning hittade skillnaden mellan logisk och kanonisk appdatamapp under Windows omdirigering; rootinformationen korrigerades till den kanoniska sökvägen. Den avslutande fullständiga körningen och de två separata testerna är godkända. Uppgradering av användarens installerade app testas inte automatiskt.
+
+
 ## Installationsrelease 0.3.2 — 2026-09-20
 
 Funktionerna nedan paketeras i nand 0.3.2. Versionsnummer i npm, Cargo och Tauri är synkroniserade. Funktionsverifieringen nedan genomfördes före versionshöjningen; Windows-installationsbygget byggs separat med produktidentiteten oförändrad.

@@ -7,10 +7,11 @@ export type LocalFilesTransport = {
   snapshot: () => Promise<Snapshot>;
   save: (input: { path: string; text: string; expected: string | null }) => Promise<Saved>;
 };
-export const nativeLocalFiles: LocalFilesTransport = {
-  async snapshot() { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Snapshot>("local_snapshot"); },
-  async save(input) { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Saved>("local_save", input); },
-};
+export function localFilesTransport(directory?: string): LocalFilesTransport { return {
+  async snapshot() { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Snapshot>("local_snapshot", { directory }); },
+  async save(input) { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Saved>("local_save", { ...input, directory }); },
+}; }
+export const nativeLocalFiles = localFilesTransport();
 async function remote(path: string, text: string | null): Promise<RemoteNote> {
   const sha = text === null ? null : Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))).map(byte => byte.toString(16).padStart(2, "0")).join("");
   return { path, text: text ?? "", sha };
