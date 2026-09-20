@@ -10,6 +10,7 @@ import { noteSelectionKey } from "@/lib/cached-workspaces";
 import { sv } from "@/lib/i18n";
 import type { OpenWorkspace } from "./workspace-picker";
 import { Preview } from "./preview";
+import { LocalExplorer } from "./local-explorer";
 import { FileTree } from "./file-tree";
 import { Dialog } from "./dialog";
 import { ConflictDialog } from "./conflict-dialog";
@@ -57,6 +58,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
   const [filter, setFilter] = useState("");
   const [mode, setMode] = useState<ViewMode>("split");
   const [sidebar, setSidebar] = useState(false);
+  const [browseFiles, setBrowseFiles] = useState(false);
   const [details, setDetails] = useState(false);
   const [newNote, setNewNote] = useState(false);
   const [newPath, setNewPath] = useState("");
@@ -75,7 +77,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
   const notePath = draft?.path;
   const localStatus = store.status.get(active);
   const locked = lockedKey !== active;
-  const allDrafts = store.values();
+  const allDrafts = store.values().filter(value => !(local && desktop && value.localExcluded));
   const paths = [...new Set([...entries.map(entry => entry.path), ...allDrafts.map(draft => draft.path)])].sort((a, b) => a.localeCompare(b, "sv"));
   const dirtyPaths = new Set(allDrafts.filter(dirty).map(draft => draft.path));
   const visiblePaths = paths.filter(path => path.toLocaleLowerCase("sv").includes(filter.toLocaleLowerCase("sv")));
@@ -118,7 +120,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
         setSync(runner);
       }
       const previous = localStorage.getItem(noteSelectionKey(account, scope));
-      const available = [...new Set([...store.values().map(value => value.path), ...(!local ? opened.notes.map(value => value.path) : [])])].sort((a, b) => a.localeCompare(b, "sv"));
+      const available = [...new Set([...store.values().filter(value => !value.localExcluded).map(value => value.path), ...(!local ? opened.notes.map(value => value.path) : [])])].sort((a, b) => a.localeCompare(b, "sv"));
       const path = previous && available.includes(previous) ? previous : available[0];
       setReady(true);
       if (path) setActive(draftKey(account, scope, path));
@@ -222,7 +224,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
   async function createNote() {
     const parsed = (wiki ? wikiPathSchema : pathSchema).safeParse(/\.(md|csv)$/i.test(newPath) ? newPath : `${newPath}.md`);
     if (!newPath.trim() || !parsed.success) { setNewError(wiki ? "Ange ett sidnamn utan mappar eller specialtecken, till exempel Min idé.md." : "Ange ett namn, till exempel Projekt/Min idé.md."); return; }
-    if (paths.includes(parsed.data)) { setNewError("En anteckning med den sökvägen finns redan."); return; }
+    if (paths.includes(parsed.data) || store.values().some(value => value.path === parsed.data)) { setNewError("En anteckning med den sökvägen finns redan."); return; }
     const created = newDraft(account, scope, { path: parsed.data, sha: null, text: /\.csv$/i.test(parsed.data) ? "Namn,Värde\n" : `# ${parsed.data.split("/").pop()!.replace(/\.md$/i, "")}\n\n` });
     if (!navigator.locks) { setNewError("Din webbläsare behöver stöd för Web Locks."); return; }
     try {
@@ -369,7 +371,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
       {local && desktop && <button className="workspace-link text-button" title={files?.state.directory || localFolder?.directory || "Dokument/nand"} onClick={() => void openLocalFolder()}>Öppna i Utforskaren <ArrowUpRight size={14} /></button>}
       <div className="sidebar-tools"><div className="search-field"><Search size={16} /><input ref={inputRef} aria-label="Sök filnamn" placeholder="Hitta en anteckning…" value={filter} onChange={event => setFilter(event.target.value)} /><kbd>Ctrl K</kbd></div><button className="new-note-button" onClick={() => setNewNote(true)} disabled={!ready}><FilePlus2 size={17} /> Ny anteckning <span>+</span></button></div>
       <input ref={fileInputRef} type="file" accept={wiki ? ".md,text/markdown" : ".md,.csv,text/markdown,text/csv"} aria-label="Fil att importera" hidden disabled={!ready || importing} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) importFile(file); }} /><div className="tree-heading"><span>FILER</span><span>{paths.length}</span></div>
-      <div className="tree-scroll"><FileTree paths={visiblePaths} active={draft?.path} dirtyPaths={dirtyPaths} onOpen={path => void openNote(path)} />{ready && !visiblePaths.length && <p className="empty-tree">{filter ? "Inga matchande filnamn." : "Din nästa tanke börjar här."}</p>}</div>
+      <div className="tree-scroll">{local && desktop && localFolder && files && <details className="local-browser" onToggle={event => setBrowseFiles(event.currentTarget.open)}><summary>Utforska rotmappen</summary>{browseFiles && <LocalExplorer directory={localFolder.directory} selected={new Set(paths)} onInclude={async path => { const key = await files.include(path); setActive(key); setLockAttempt(value => value + 1); setFilter(""); }} onExclude={async path => { await files.exclude(path); if (draft?.path === path) setActive(""); }} />}</details>}<FileTree paths={visiblePaths} active={draft?.path} dirtyPaths={dirtyPaths} onOpen={path => void openNote(path)} />{ready && !visiblePaths.length && <p className="empty-tree">{filter ? "Inga matchande filnamn." : "Din nästa tanke börjar här."}</p>}</div>
       <div className="sidebar-bottom"><div className="local-explanation"><span className="tiny-dot" /><div>{local ? "Ett eget litet skrivrum" : wiki ? "Dina sidor, i GitHub Wiki" : "Dina filer, i ditt repository"}<p>{local ? (desktop ? "Texten lagras i appen på den här datorn. Exportera det du vill behålla." : "Texten lagras i den här webbläsaren. Exportera det du vill behålla.") : `${dirtyPaths.size} utkast i kön. Synkas automatiskt när appen är öppen.`}</p></div></div>
         <div className="account-row"><span className="account-avatar">{local ? "L" : user!.login[0].toUpperCase()}</span><span>{local ? "Lokalt läge" : `@${user!.login}`}</span><button className="icon-button" onClick={onTheme} aria-label={dark ? "Ljust tema" : "Mörkt tema"}>{dark ? <Sun size={17} /> : <Moon size={17} />}</button>{!local && <button className="icon-button" onClick={prepareLogout} aria-label="Logga ut"><LogOut size={16} /></button>}</div>
       </div>

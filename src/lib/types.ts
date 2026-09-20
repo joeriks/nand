@@ -17,6 +17,7 @@ export type Draft = {
   text: string;
   updatedAt: number;
   savedAt?: number;
+  localExcluded?: boolean;
   pending?: PendingSave;
   conflict?: Conflict;
   syncError?: { message: string; retryAt: number };

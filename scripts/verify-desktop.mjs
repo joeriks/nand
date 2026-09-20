@@ -8,7 +8,7 @@ import { performance } from "node:perf_hooks";
 // No test flags, fake authentication or transport bypasses are added to the app.
 const targetDirectory = resolve("src-tauri/target/verification");
 const verificationIdentity = `se.gitbsidian.verification${Date.now()}`;
-await new Promise((resolveBuild, reject) => {
+if (!process.argv.includes("--skip-build")) await new Promise((resolveBuild, reject) => {
   const build = spawn(process.execPath, ["scripts/tauri.mjs", "build", "--no-bundle", "--config", JSON.stringify({ identifier: verificationIdentity, productName: "nand verification" })], { windowsHide: true, stdio: "inherit", env: { ...process.env, CARGO_TARGET_DIR: targetDirectory } });
   build.once("error", reject);
   build.once("exit", code => code === 0 ? resolveBuild() : reject(new Error(`Verification build failed: ${code}`)));
@@ -93,7 +93,9 @@ try {
   expect(await readFile(join(localFiles.directory, nativePath), "utf8")).toBe("# Updated");
   const externalCsv = `External-${Date.now()}.csv`;
   await writeFile(join(localFiles.directory, externalCsv), "ID,Value\n00123,External\n");
-  await app.page.getByTitle(externalCsv, { exact: true }).click();
+  await app.page.getByText("Utforska rotmappen", { exact: true }).click();
+  await app.page.getByRole("checkbox", { name: `Inkludera ${externalCsv}`, exact: true }).click();
+  await expect(app.page.getByRole("checkbox", { name: `Inkludera ${externalCsv}`, exact: true })).toBeChecked();
   await expect(app.page.getByLabel("Rad 1, ID", { exact: true })).toHaveValue("00123");
   await app.page.getByLabel("Rad 1, Value", { exact: true }).fill("Edited in nand");
   await expect.poll(() => readFile(join(localFiles.directory, externalCsv), "utf8")).toContain("Edited in nand");

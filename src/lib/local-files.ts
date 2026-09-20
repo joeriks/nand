@@ -4,11 +4,11 @@ import { dirty, draftKey, type RemoteNote } from "./types";
 type Snapshot = { directory: string; files: { path: string; text: string }[] };
 type Saved = { saved: boolean; text: string | null };
 export type LocalFilesTransport = {
-  snapshot: () => Promise<Snapshot>;
+  snapshot: (paths: string[]) => Promise<Snapshot>;
   save: (input: { path: string; text: string; expected: string | null }) => Promise<Saved>;
 };
 export function localFilesTransport(directory?: string): LocalFilesTransport { return {
-  async snapshot() { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Snapshot>("local_snapshot", { directory }); },
+  async snapshot(paths) { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Snapshot>("local_snapshot", { directory, paths }); },
   async save(input) { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Saved>("local_save", { ...input, directory }); },
 }; }
 export const nativeLocalFiles = localFilesTransport();
@@ -47,8 +47,34 @@ export class LocalFiles {
     else if (this.options.lock) await this.options.lock(key, run);
     else if (navigator.locks) await navigator.locks.request(`gitbsidian-edit:${key}`, { ifAvailable: true }, async lock => { if (lock) await run(); });
   }
+  async include(path: string) {
+    await this.running;
+    const snapshot = await this.transport.snapshot([path]);
+    const file = snapshot.files.find(file => file.path === path);
+    if (!file) throw new Error("Filen finns inte längre.");
+    const value = await remote(path, file.text);
+    const key = draftKey(this.options.account, this.options.scope, path);
+    await this.edit(key, async () => {
+      const current = this.options.store.get(key);
+      this.options.store.set(current ? { ...reconcile(current, value), localExcluded: false } : newDraft(this.options.account, this.options.scope, value));
+    });
+    if (this.options.store.status.get(key) !== "stored") throw new Error("Filvalet kunde inte sparas.");
+    return key;
+  }
+  async exclude(path: string) {
+    await this.flush();
+    const key = draftKey(this.options.account, this.options.scope, path);
+    await this.edit(key, async () => {
+      const current = this.options.store.get(key);
+      if (!current) return;
+      if (dirty(current)) throw new Error("Spara filen och lös eventuella konflikter innan du tar bort den ur samlingen.");
+      this.options.store.update(key, value => ({ ...value, localExcluded: true }));
+    });
+    if (this.options.store.status.get(key) !== "stored") throw new Error("Filvalet kunde inte sparas.");
+  }
   async load() {
-    const snapshot = await this.transport.snapshot();
+    const selected = this.options.store.values().filter(draft => !draft.localExcluded);
+    const snapshot = await this.transport.snapshot(selected.map(draft => draft.path));
     if (this.disposed) return;
     this.emit({ directory: snapshot.directory });
     const paths = new Set(snapshot.files.map(file => file.path));
@@ -61,7 +87,7 @@ export class LocalFiles {
         if (next !== current) this.options.store.set(next);
       });
     }
-    for (const draft of this.options.store.values()) {
+    for (const draft of selected) {
       if (draft.baseSha !== null && !paths.has(draft.path)) await this.edit(draft.key, async () => {
         this.options.store.update(draft.key, value => reconcile(value, { path: value.path, text: "", sha: null }));
       });
@@ -78,11 +104,11 @@ export class LocalFiles {
     try {
       await this.load();
       for (const draft of this.options.store.values()) {
-        if (!dirty(draft) || draft.conflict) continue;
+        if (draft.localExcluded || !dirty(draft) || draft.conflict) continue;
         await this.edit(draft.key, async () => {
           const store = this.options.store;
           const current = store.get(draft.key);
-          if (!current || current.conflict || !dirty(current)) return;
+          if (!current || current.localExcluded || current.conflict || !dirty(current)) return;
           const pending = { text: current.text, baseSha: current.baseSha, startedAt: Date.now() };
           store.update(current.key, value => ({ ...value, pending }));
           await store.flush();

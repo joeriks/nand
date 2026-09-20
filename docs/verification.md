@@ -1,5 +1,13 @@
 # Verifieringsrapport
 
+## Valbara lokala filer — 0.3.4, 2026-09-20
+
+Godkänt: Next.js-produktionsbygge/TypeScript, ESLint, 19 enhetstester för lokala filer och utkast samt sex Edge-tester för menyer och import. Windows-regressionen klarade åtta starter utan console/page errors. En tidigare körning fastnade vid stängning; omkörningen med samma binär passerade.
+
+Det isolerade rotmappstestet verifierar explicit filval, direkt redigering på disk, separata rotmappar, externa ändringar, CSV-val, beständigt urval och avmarkering utan filradering. 1005 oöppnade undermappar och en ogiltig, ovald UTF-8-fil blockerar inte samlingen. Kataloglistning pagineras med 200 poster och sökvägar utanför roten avvisas. Första inkluderade filen blir redigerbar efter att inkluderingslåset släppts. Windows mappdialog simuleras genom testappens sparade inställning; användarens appdata används inte.
+
+Rapporter: `artifacts/local-folder-verification.json` och `artifacts/desktop-verification.json`. Utforskarens layout har granskats visuellt; kryssrutorna har fått egna flexregler för att undvika att globala formulärstilar bryter raderna.
+
 ## Uppdaterare och valbar rotmapp — 0.3.3, 2026-09-20
 
 Verifierat: Next.js-produktionsbygge/TypeScript, ESLint, 22 enhetstester för uppdateringar/utkast/lokala filer samt 20 Edge-tester för menyer, importer och sparskydd. Windows-regressionen har klarat åtta starter med separat appidentitet, filsystem och WebView-profil, utan console/page errors.

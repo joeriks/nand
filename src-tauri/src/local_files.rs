@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs, io::Write, path::{Component, Path, PathBuf}, sync::Mutex, time::{SystemTime, UNIX_EPOCH}};
+use std::{fs, io::Write, path::{Component, Path, PathBuf}, sync::Mutex, time::{SystemTime, UNIX_EPOCH}};
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_dialog::DialogExt;
@@ -68,8 +68,7 @@ pub async fn choose_local_folder(app: tauri::AppHandle) -> Result<Option<FolderI
         let path = selected.into_path().map_err(|_| "Ogiltig mapp.")?.canonicalize().map_err(|_| "Kunde inte öppna mappen.")?;
         if !path.is_dir() { return Err("Välj en mapp.".into()); }
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
-        let mut files = Vec::new();
-        scan(&path, &path, &mut files, &mut 0, &mut HashSet::new())?;
+        fs::read_dir(&path).map_err(|_| "Kunde inte läsa mappen.")?;
         let directory = display_folder(&path);
         let default = default_folder(&app)?;
         let is_default = default.canonicalize().is_ok_and(|value| value == path);
@@ -96,7 +95,7 @@ fn display_folder(path: &Path) -> String {
 fn target(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let path = Path::new(relative);
     if relative.is_empty() || relative.len() > 1000 || relative.contains(['\\', ':', '\0']) || path.is_absolute()
-        || !supported(path) || path.components().any(|c| !matches!(c, Component::Normal(_)))
+        || path.components().any(|c| !matches!(c, Component::Normal(_)))
         || relative.split('/').any(|c| c.is_empty() || c == "." || c == ".." || c.eq_ignore_ascii_case(".git") || c.eq_ignore_ascii_case(".obsidian") || c.starts_with(".nand-")) {
         return Err("Ogiltig lokal filsökväg.".into());
     }
@@ -128,32 +127,10 @@ fn read(path: &Path) -> Result<Option<String>, String> {
     Ok(Some(text))
 }
 
-fn scan(root: &Path, dir: &Path, files: &mut Vec<LocalFile>, total: &mut usize, visited: &mut HashSet<PathBuf>) -> Result<(), String> {
-    let canonical = dir.canonicalize().map_err(|_| "Kunde inte kontrollera den lokala mappen.")?;
-    if !canonical.starts_with(root) || !visited.insert(canonical) { return Ok(()); }
-    if visited.len() > 1000 { return Err("Den lokala samlingen innehåller för många mappar.".into()); }
-    for entry in fs::read_dir(dir).map_err(|_| "Kunde inte läsa den lokala mappen.")? {
-        let entry = entry.map_err(|_| "Kunde inte läsa en lokal fil.")?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name.eq_ignore_ascii_case(".git") || name.eq_ignore_ascii_case(".obsidian") || name.starts_with(".nand-") { continue; }
-        let kind = entry.file_type().map_err(|_| "Kunde inte läsa filtypen.")?;
-        if kind.is_symlink() { continue; }
-        let path = entry.path();
-        if !path.canonicalize().map_err(|_| "Kunde inte kontrollera mappen.")?.starts_with(root) { continue; }
-        if kind.is_dir() { scan(root, &path, files, total, visited)?; }
-        else if kind.is_file() && supported(&path) {
-            let relative = path.strip_prefix(root).map_err(|_| "Ogiltig lokal sökväg.")?.to_string_lossy().replace('\\', "/");
-            let text = read(&target(root, &relative)?)?.ok_or("En fil försvann under läsningen. Försök igen.")?;
-            *total += text.len();
-            if files.len() >= 500 || *total > 16 * 1024 * 1024 { return Err("Den lokala samlingen får innehålla högst 500 filer och 16 MiB text.".into()); }
-            files.push(LocalFile { path: relative, text });
-        }
-    }
-    Ok(())
-}
 
 fn save(root: &Path, relative: &str, text: &str, expected: Option<&str>) -> Result<Saved, String> {
     if text.len() as u64 > MAX_BYTES || text.contains('\0') { return Err("Filen måste vara UTF-8-text på högst 1 MiB.".into()); }
+    if !supported(Path::new(relative)) { return Err("Endast Markdown och CSV stöds.".into()); }
     let path = target(root, relative)?;
     let current = read(&path)?;
     if current.as_deref() == Some(text) { return Ok(Saved { saved: true, text: current }); }
@@ -181,13 +158,23 @@ fn save(root: &Path, relative: &str, text: &str, expected: Option<&str>) -> Resu
 }
 
 #[tauri::command]
-pub async fn local_snapshot(app: tauri::AppHandle, directory: Option<String>) -> Result<Snapshot, String> {
+pub async fn local_snapshot(app: tauri::AppHandle, directory: Option<String>, paths: Option<Vec<String>>) -> Result<Snapshot, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
         let root = folder(&app)?;
         check_directory(&root, directory.as_deref())?;
         let mut files = Vec::new();
-        scan(&root, &root, &mut files, &mut 0, &mut HashSet::new())?;
+        let paths = paths.unwrap_or_default();
+        if paths.len() > 500 { return Err("Välj högst 500 filer i samlingen.".into()); }
+        let mut total = 0;
+        for relative in paths {
+            if !supported(Path::new(&relative)) { return Err("Endast Markdown och CSV stöds.".into()); }
+            if let Some(text) = read(&target(&root, &relative)?)? {
+                total += text.len();
+                if total > 16 * 1024 * 1024 { return Err("De valda filerna är större än 16 MiB.".into()); }
+                files.push(LocalFile { path: relative, text });
+            }
+        }
         files.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(Snapshot { directory: display_folder(&root), files })
     }).await.map_err(|_| "Kunde inte läsa den lokala lagringen.")?
@@ -206,4 +193,34 @@ pub async fn local_save(app: tauri::AppHandle, path: String, text: String, expec
 #[tauri::command]
 pub fn open_local_folder(app: tauri::AppHandle) -> Result<(), String> {
     app.opener().open_path(display_folder(&folder(&app)?), None::<&str>).map_err(|_| "Kunde inte öppna mappen i Utforskaren.".into())
+}
+
+#[derive(Serialize)]
+pub struct DirectoryEntry { path: String, name: String, folder: bool }
+#[derive(Serialize)]
+pub struct DirectoryPage { entries: Vec<DirectoryEntry>, next: Option<usize> }
+
+#[tauri::command]
+pub async fn local_list_directory(app: tauri::AppHandle, directory: String, path: String, offset: Option<usize>) -> Result<DirectoryPage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa mappen.")?;
+        let root = folder(&app)?;
+        check_directory(&root, Some(&directory))?;
+        let dir = if path.is_empty() { root.clone() } else { target(&root, &path)? };
+        let offset = offset.unwrap_or(0);
+        let mut entries = Vec::new();
+        let mut next = None;
+        for (index, entry) in fs::read_dir(dir).map_err(|_| "Kunde inte läsa mappen.")?.enumerate().skip(offset) {
+            if index - offset >= 200 { next = Some(index); break; }
+            let Ok(entry) = entry else { continue; };
+            let name = entry.file_name().to_string_lossy().to_string();
+            let relative = if path.is_empty() { name.clone() } else { format!("{path}/{name}") };
+            let Ok(checked) = target(&root, &relative) else { continue; };
+            let Ok(kind) = entry.file_type() else { continue; };
+            if kind.is_symlink() || (!kind.is_dir() && !(kind.is_file() && supported(&checked))) { continue; }
+            entries.push(DirectoryEntry { path: relative, name, folder: kind.is_dir() });
+        }
+        entries.sort_by(|a, b| b.folder.cmp(&a.folder).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+        Ok(DirectoryPage { entries, next })
+    }).await.map_err(|_| "Kunde inte läsa mappen.".to_owned())?
 }

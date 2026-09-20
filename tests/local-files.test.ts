@@ -9,7 +9,7 @@ function fixture(initial: Record<string, string> = {}) {
   const store = new DraftStore(), scope = crypto.randomUUID(), account = "local";
   let failSave = false, loseReply = false;
   const transport: LocalFilesTransport = {
-    snapshot: async () => ({ directory: "C:\\Documents\\nand", files: [...disk].map(([path, text]) => ({ path, text })) }),
+    snapshot: async paths => ({ directory: "C:\\Documents\\nand", files: [...disk].filter(([path]) => paths.includes(path)).map(([path, text]) => ({ path, text })) }),
     save: async ({ path, text, expected }) => {
       if (failSave) throw new Error("Disken är skrivskyddad");
       const current = disk.get(path) ?? null;
@@ -26,15 +26,33 @@ function fixture(initial: Record<string, string> = {}) {
 }
 
 describe("ordinary local files with a durable editing buffer", () => {
-  it("migrates old local drafts and discovers existing Markdown and CSV without rewriting them", async () => {
+  it("migrates drafts and reads only explicitly included existing files", async () => {
     const f = fixture({ "existing.md": "# Original", "Data/table.csv": "\ufeffID;Pris\r\n001;1,25\r\n" });
     f.draft("Legacy.md", "# Bevarat utkast\r\n");
     await f.files.tick();
     expect(f.files.state.error).toBe("");
     expect(f.disk.get("Legacy.md")).toBe("# Bevarat utkast\r\n");
+    expect(f.store.get(f.key("existing.md"))).toBeUndefined();
+    await f.files.include("Data/table.csv");
     expect(f.store.get(f.key("Data/table.csv"))?.text).toBe("\ufeffID;Pris\r\n001;1,25\r\n");
     expect(dirty(f.store.get(f.key("Legacy.md"))!)).toBe(false);
     expect((await readDraft(f.key("Legacy.md")))?.text).toBe("# Bevarat utkast\r\n");
+  });
+  it("persists exclusion, stops reading excluded files, and safely includes them again", async () => {
+    const f = fixture({ "note.md": "# First" });
+    await f.files.include("note.md"); await f.files.exclude("note.md");
+    expect((await readDraft(f.key("note.md")))?.localExcluded).toBe(true);
+    f.disk.set("note.md", "# External"); await f.files.tick();
+    expect(f.store.get(f.key("note.md"))?.text).toBe("# First");
+    expect(f.disk.get("note.md")).toBe("# External");
+    await f.files.include("note.md");
+    expect(f.store.get(f.key("note.md"))?.text).toBe("# External");
+    expect(f.store.get(f.key("note.md"))?.localExcluded).toBe(false);
+  });
+  it("does not exclude a conflicted draft", async () => {
+    const f = fixture({ "note.md": "# Disk" }); f.draft("note.md", "# Unsaved");
+    await expect(f.files.exclude("note.md")).rejects.toThrow("konflikter");
+    expect(f.store.get(f.key("note.md"))?.localExcluded).not.toBe(true);
   });
   it("does not overwrite an existing file when migrating a same-name draft", async () => {
     const f = fixture({ "note.md": "# Disk version" }); f.draft("note.md", "# Local draft");
@@ -44,7 +62,7 @@ describe("ordinary local files with a durable editing buffer", () => {
     expect(f.store.get(f.key("note.md"))?.text).toBe("# Local draft");
   });
   it("reads external edits and protects simultaneous edits or external deletions with conflicts", async () => {
-    const f = fixture({ "note.md": "# First" }); await f.files.tick();
+    const f = fixture({ "note.md": "# First" }); await f.files.include("note.md"); await f.files.tick();
     f.disk.set("note.md", "# External"); await f.files.tick();
     expect(f.store.get(f.key("note.md"))?.text).toBe("# External");
     f.store.update(f.key("note.md"), value => ({ ...value, text: "# Typing" }));
