@@ -1,0 +1,384 @@
+# Projektunderlag: webbaserad kunskapsapp med GitHub som lagring
+
+Detta är ett fristående uppdrag till en AI-utvecklare. Dokumentet innehåller produktidé, omfattning, tekniska riktlinjer och acceptanskriterier. Ingen tidigare konversation behövs.
+
+## 1. Ditt uppdrag
+
+Bygg en webbaserad app för anteckningar och personlig kunskap, inspirerad av Obsidians arbetssätt. Användaren ska kunna öppna en sajt, logga in med GitHub, välja ett repository och läsa, skapa, länka och redigera anteckningar där.
+
+GitHub ska vara den permanenta lagringen för anteckningar och versionshistorik. Hela den vanliga användarupplevelsen ska fungera i webbläsaren, utan krav på installerat Git eller en lokal datorapp. En liten serverdel för autentisering och GitHub-anrop är tillåten och rekommenderad.
+
+Bygg målbilden stegvis med fungerande leveranser. Börja med tillförlitlig redigering och riktig GitHub-sparning. Utöka sedan med funktionerna i detta dokument. En visuell prototyp med låtsasdata är inte en färdig första leverans.
+
+## 2. Produktens mål
+
+Appen ska kombinera:
+
+- En lugn, snabb och behaglig skrivupplevelse.
+- Anteckningar som användaren äger och kan läsa i andra program.
+- Länkar och bakåtlänkar som gör information lätt att återfinna och utveckla.
+- Åtkomst från olika datorer genom samma sajt och repository.
+- Begriplig sparning, historik och konflikthantering utan krav på Git-kunskap.
+- Kompatibilitet med centrala delar av Obsidians anteckningsformat.
+
+Detta är en egen produkt. Obsidians användargränssnitt och hela dess ekosystem av tillägg ska inte kopieras eller utlovas.
+
+## 3. Användaren och det viktigaste flödet
+
+Första målgruppen är en person som vill samla kunskap, projektanteckningar och idéer i sitt eget GitHub-repository. Prioritera en användare på flera enheter. Samtidig redigering av samma dokument av flera personer är inte ett krav för första versionen.
+
+Huvudflödet:
+
+1. Användaren öppnar sajten och loggar in med GitHub.
+2. Användaren ger appen åtkomst till ett valt repository.
+3. Användaren väljer repository, gren och eventuellt en undermapp för anteckningarna.
+4. Appen visar mappar och anteckningar.
+5. Användaren öppnar en anteckning eller skapar en ny.
+6. Texten sparas löpande som ett lokalt utkast.
+7. Användaren väljer ”Spara till GitHub”.
+8. Appen kontrollerar versionen och sparar ändringen som en commit.
+9. Användaren kan senare öppna sajten på en annan enhet och läsa den sparade versionen.
+
+Första versionen arbetar med ett repository och en gren åt gången. Stöd för flera samtidiga arbetsytor kan komma senare. Publicering eller driftsättning av själva sajten ska vara separat från sparning av anteckningar.
+
+## 4. Funktioner som ska ingå i målbilden
+
+### 4.1 Skrivande och navigation
+
+- Markdown-editor med behaglig typografi, markering av syntax och förhandsvisning.
+- Skapa, öppna, byta namn på, flytta och radera anteckningar.
+- Filträd, brödsmulor, senast öppnade anteckningar och snabbväxling.
+- Ångra och gör om under redigering.
+- Tangentbordsgenvägar och kommandopalett.
+- Responsivt gränssnitt för dator, surfplatta och mobil.
+- Ljust och mörkt tema.
+- Bilder och länkar till bilagor; större uppladdningar införs med tydliga gränser.
+
+Förhandsvisning och editor ska ha konsekvent stöd för rubriker, listor, checklistor, tabeller, länkar och kodblock. Mer avancerad redigering direkt i formaterad text kan införas efter att den grundläggande editorn är stabil.
+
+### 4.2 Länkar och kunskapsnätverk
+
+- Interna länkar med `[[Anteckning]]`.
+- Visningsnamn med `[[Anteckning|annan text]]`.
+- Länkförslag när användaren skriver `[[`.
+- Skapa en saknad anteckning från en länk.
+- Bakåtlänkar som visar vilka anteckningar som länkar till den öppna filen.
+- Stöd för vanliga relativa Markdown-länkar.
+- Länkar till rubriker samt senare blockreferenser och inbäddade anteckningar.
+- En lokal graf över den öppna anteckningens relationer.
+- En större graf över hela samlingen, med filtrering och klickbara noder.
+
+Länkar måste lösas entydigt. Om flera filer har samma namn ska appen visa sökvägar och låta användaren välja. Den får inte tyst länka till fel anteckning. Länkar inne i kodexempel ska inte räknas som verkliga relationer.
+
+### 4.3 Sökning och struktur
+
+- Sökning i namn och hela anteckningstexter.
+- Sökresultat med relevanta textutdrag.
+- Taggar, inklusive nästlade taggar om det är rimligt i vald implementation.
+- Egenskaper i YAML-frontmatter, exempelvis status, datum, ämne och projekttillhörighet.
+- Filtrering efter tagg, mapp och egenskaper.
+- Dagliga anteckningar och enkla mallar.
+- Bokmärken eller favoriter.
+- Tabellvyer över anteckningar, med filtrering och sortering efter egenskaper.
+
+Tabellvyerna kan inspireras av Obsidian Bases. Full kompatibilitet med `.base`-formatets filter och formler är en separat uppgift och får inte förutsättas bara för att appen kan visa tabeller.
+
+### 4.4 Canvas
+
+- En arbetsyta med flyttbara kort, anteckningar och kopplingar.
+- Panorering, zoom och sparad placering av kort.
+- Länkar från kort till riktiga anteckningar.
+- Sparning av arbetsytans struktur i en läsbar fil i repositoryt.
+
+Undersök JSON Canvas som format innan ett eget format skapas. Eventuell kompatibilitet med Obsidians Canvas måste verifieras med riktiga exempelfiler. Börja med textkort, anteckningskort och kopplingar.
+
+### 4.5 Historik och återställning
+
+- Visa tidigare sparade versioner av en anteckning.
+- Visa skillnader mellan versioner på ett begripligt sätt.
+- Återställ en tidigare version genom en ny commit.
+- Återställ raderade anteckningar från historiken när det är möjligt.
+- Separera redigeringsångring, lokala utkast och GitHub-historik i både kod och gränssnitt.
+
+### 4.6 Offlinearbete
+
+- Appen kan öppnas offline efter att nödvändiga appresurser har lagrats lokalt.
+- Tidigare nedladdade anteckningar kan läsas och redigeras offline.
+- Lokala ändringar finns kvar efter vanlig omladdning eller omstart av webbläsaren.
+- Ändringar kan skickas när anslutning och inloggning fungerar igen.
+- En ny enhet behöver internet för första inloggning och hämtning.
+
+Offline får inte betyda att endast texten i den redan öppna fliken överlever. Samtidigt får appen inte lova att webbläsarlagring är en permanent säkerhetskopia: den kan rensas eller begränsas. Visa tydligt vilka ändringar som ännu inte finns på GitHub. Lova inte synk medan webbläsaren är stängd.
+
+## 5. Föreslagen arkitektur
+
+```text
+Webbläsare
+  - gränssnitt och Markdown-editor
+  - lokal databas för utkast och cache
+  - sökindex och index över länkar
+  - kö för ändringar som väntar på sparning
+           |
+           | autentiserad session
+           v
+Liten serverdel
+  - GitHub-inloggning och sessionshantering
+  - behörighetskontroller
+  - autentiserade GitHub-anrop
+           |
+           v
+Användarens GitHub-repository
+  - Markdown och bilagor
+  - eventuella Canvas- och vyfiler
+  - versionshistorik
+```
+
+Tekniska utgångspunkter, som får justeras om projektets miljö motiverar det:
+
+| Område | Föreslagen lösning |
+| --- | --- |
+| Gränssnitt | TypeScript och React |
+| Markdown-editor | CodeMirror med Markdown-stöd |
+| Lokala utkast och cache | IndexedDB |
+| Offline appresurser | Service worker/PWA |
+| Indexering | I webbläsaren, gärna i en Web Worker när arbetet annars blockerar skrivandet |
+| Serverdel | Ett litet API i ett etablerat ramverk, möjligt att driftsätta serverless |
+| GitHub-autentisering | GitHub App med åtkomst till utvalda repositories |
+| Filoperationer | GitHubs API:er för innehåll och vid behov commits med flera filer |
+
+Kontrollera aktuella biblioteksversioner och officiell dokumentation vid implementation. Undvik onödiga tjänster och infrastruktur. Någon separat databas för anteckningsinnehållet krävs inte från början. Sessions- eller tokenhantering kan däremot kräva serverlagring beroende på vald lösning.
+
+GitHub är källan för bekräftat sparade versioner. Ett lokalt utkast kan innehålla nyare, ännu osparat arbete och får därför aldrig ersättas bara för att ny data hämtas från GitHub.
+
+## 6. Filformat och kompatibilitet
+
+Anteckningar ska sparas som vanliga UTF-8-kodade Markdown-filer. Egenskaper ska kunna ligga i YAML-frontmatter. Exempel:
+
+```markdown
+---
+tags:
+  - projekt
+status: pågående
+---
+
+# Trädgården
+
+Planeringen bygger på anteckningen [[Odling]].
+
+- [ ] Bestäm vilka växter som ska odlas.
+```
+
+Exempel på struktur:
+
+```text
+anteckningar/
+  projekt/
+    Trädgården.md
+  kunskap/
+    Odling.md
+  dagbok/
+    2026-09-19.md
+  mallar/
+    Projekt.md
+  bilagor/
+    skiss.png
+```
+
+Appen ska också kunna öppna befintliga strukturer; den får inte kräva att alla flyttar sina filer till exemplet ovan.
+
+Behåll okända egenskaper och syntax som appen inte kan tolka. Att öppna och spara en anteckning får inte rensa bort exempelvis Obsidian-specifika block eller konfiguration. Ändra inte repositoryts övriga filer automatiskt.
+
+Sökindex, tillfälliga filer, åtkomstuppgifter och sessionsdata ska inte checkas in. Små portabla inställningar och definitioner av vyer får sparas i repositoryt när det finns ett tydligt behov och ett dokumenterat format.
+
+Målet är att en lokal kopia av repositoryt också ska kunna öppnas i Obsidian för de format vi uttryckligen stödjer. Kompatibilitet ska beskrivas per funktion och verifieras; det är inte ett löfte om fullständig Obsidian-kompatibilitet.
+
+## 7. GitHub, autentisering och behörigheter
+
+- Användaren ska kunna välja vilka repositories en GitHub App får tillgång till.
+- Begär minsta behörighet som behövs för de implementerade funktionerna.
+- Användarens session och behörighet ska kontrolleras på servern för varje operation.
+- Lita inte på att ett repository-id eller en sökväg från webbläsaren innebär åtkomst.
+- Förvara apphemligheter och GitHub-åtkomstuppgifter på servern i den rekommenderade arkitekturen.
+- Lägg inte hemligheter i frontendpaket, repository, loggar eller exempelkonfiguration.
+- Om åtkomsten upphör ska utkast bevaras och användaren få en begriplig väg tillbaka till inloggning.
+- Hantera privata repositories och privata bilagor utan att skapa publika delningsadresser.
+
+En vald undermapp är en avgränsning som appen behöver upprätthålla. Beskriv den inte som en separat behörighetsgräns hos GitHub, där innehållsbehörigheten normalt avser repositoryt.
+
+Skyddade grenar och repositoryregler ska respekteras. Om direkt sparning inte är tillåten ska appen förklara det och erbjuda ett lämpligt val av arbetsgren. Ett fullständigt flöde med pull requests kan tillkomma senare; skydd får inte kringgås.
+
+## 8. Sparning och konflikter
+
+Detta är en central del av produkten och ska ingå från första fungerande GitHub-versionen.
+
+### Tydliga tillstånd
+
+Gränssnittet ska kunna visa åtminstone:
+
+- Ändringar sparade som utkast på den här enheten.
+- Sparar till GitHub.
+- Sparat till GitHub, med tidpunkt.
+- Offline – ändringar väntar.
+- Inloggning krävs – utkastet finns kvar.
+- Konflikt – två versioner behöver jämföras.
+- Sparning misslyckades – försök igen.
+
+Använd aldrig ett generiskt ”Sparat” som får användaren att tro att ett lokalt utkast finns på andra enheter.
+
+### Datamodell för utkast
+
+Varje utkast behöver vara knutet till konto, repository, gren och sökväg. Spara även grundversionens identifierare, grundtext, aktuell utkasttext och tid för ändringen. Det gör det möjligt att upptäcka konflikter och skilja mellan olika arbetsytor.
+
+### Regler för sparning
+
+1. Spara texten lokalt löpande.
+2. Ta en bestämd ögonblicksbild av texten när sparning till GitHub börjar.
+3. Kontrollera att den fjärrversion som ändras motsvarar den grundversion användaren utgick från.
+4. Spara via GitHubs API och markera endast den bekräftade ögonblicksbilden som sparad.
+5. Om användaren skrev vidare under anropet ska den senare texten fortfarande vara ett osparat utkast.
+6. Vid versionskonflikt: hämta den nya fjärrversionen och jämför grundtext, lokal text och fjärrtext.
+7. Sammanslagning kan ske automatiskt när ändringarna inte överlappar. Vid överlappning ska användaren kunna granska och välja resultat. Bevara underlaget tills konflikten är löst.
+8. Vid avbrutet anrop med oklart resultat: kontrollera fjärrläget innan ett nytt skrivförsök görs.
+
+Köa skrivningar för en arbetsyta så att flera samtidiga filanrop inte skapar onödiga konflikter. Ingen force push eller tyst överskrivning av någon annans version.
+
+Namnbyte tillsammans med uppdaterade länkar, eller andra ändringar som måste höra ihop, ska sparas som en sammanhängande commit med kontroll av aktuell grenposition. Separata filanrop som kan lämna ett halvt genomfört namnbyte är inte tillräckliga för det flödet.
+
+Första versionen har en tydlig knapp ”Spara till GitHub”. Automatisk sparning till GitHub kan införas senare med samlade ändringar och rimlig frekvens. Ett tangenttryck ska inte skapa en egen commit.
+
+## 9. Prestanda och indexering
+
+Sökning, länkförslag och bakåtlänkar ska inte kräva ett nytt GitHub-anrop för varje interaktion.
+
+- Bygg ett lokalt index av anteckningarnas innehåll, egenskaper och länkar.
+- Fullständig sökning och fullständiga bakåtlänkar kräver indexering av hela den valda anteckningssamlingen, inte bara öppnade filer.
+- Visa när första indexeringen pågår och resultat ännu kan vara ofullständiga.
+- Uppdatera bara berörda delar av indexet efter ändringar.
+- Upptäck ändringar som gjorts direkt på GitHub eller från en annan enhet.
+- Hämta stora bilagor vid behov och använd dokumenterade API:er för större filträd.
+- Hantera API-begränsningar med cache, begränsad parallellism och väntan enligt GitHubs svar.
+- Indexering ska inte blockera skrivande eller navigation.
+
+Validera med realistiska data, inklusive tusentals mindre anteckningar. Dokumentera testmiljö, datamängd och observerad prestanda. GitHubs API-gränser och webbläsarens lagringsgränser är faktiska begränsningar som implementationen ska hantera.
+
+## 10. Gränssnitt och säker hantering av innehåll
+
+För dator: filträd till vänster, skrivyta i mitten och en utfällbar panel för bakåtlänkar och egenskaper. På mindre skärmar ska sidopanelerna bli separata vyer eller menyer. Låt läsning och skrivande ta huvuddelen av utrymmet.
+
+Använd svenska som första gränssnittsspråk. Håll textsträngar organiserade så att fler språk kan läggas till. Använd tillgängliga kontroller, synligt tangentbordsfokus och tydliga felmeddelanden.
+
+Markdown, HTML, länkar och bilagor är användarinnehåll. Förhandsvisning får inte köra godtyckliga skript. Validera filvägar och avgränsa filoperationer till vald arbetsyta. Hantera inbäddningar utan att skapa oändlig rekursion mellan anteckningar.
+
+Vid utloggning eller kontobyte ska privat cache inte visas för nästa konto. Hantera osynkroniserade utkast uttryckligt så att de varken exponeras för fel användare eller försvinner utan förvarning. Synkroniserade anteckningar ska gå att hämta igen från GitHub.
+
+## 11. Begränsningar och sådant som inte ingår från början
+
+- Obsidians befintliga tillägg fungerar inte automatiskt. Bygg centrala funktioner direkt i appen först.
+- Full kompatibilitet med Dataview, Templater, `.base`-formler eller andra tillägg är inte underförstådd.
+- Redigering i realtid med flera markörer kräver ytterligare teknik och är inte en del av första målbilden.
+- Ett privat repository är inte samma sak som lagring enbart på användarens dator eller end-to-end-kryptering.
+- Stora videofiler och omfattande mediebibliotek kräver en separat strategi, exempelvis LFS eller annan fillagring.
+- AI-funktioner, publik publicering, betalsystem och ett eget ekosystem av tillägg är inte nödvändiga för detta uppdrag.
+
+## 12. Genomförande i etapper
+
+### Etapp 0: projektgrund
+
+Inspektera det nya projektets filer och instruktioner. Välj en enkel teknisk grund, dokumentera kortfattat valet och förbered konfiguration, lokal körning och tester. Identifiera vilka GitHub-inställningar som behövs. Anta inte att en viss driftleverantör eller ett visst konto redan finns.
+
+### Etapp 1: riktig redigering mot GitHub
+
+Leverera inloggning, val av repository och gren, filträd, Markdown-editor, förhandsvisning, lokala utkast samt skapa, läsa och spara filer. Hantera versionskonflikter och visa korrekta sparstatusar.
+
+Klart när en användare kan skapa en anteckning i ett testrepository, redigera den, spara den och läsa exakt samma sparade text från en annan webbläsarsession. Utkast ska överleva omladdning. Två sessioner som ändrar samma fil får inte tyst skriva över varandra.
+
+### Etapp 2: anteckningarnas relationer
+
+Leverera interna länkar, länkförslag, bakåtlänkar, snabbväxling, fulltextsökning samt robust flytt, namnbyte och borttagning. Inför länk- och sökindex och upptäckt av externa ändringar.
+
+Klart när länkar fungerar även med identiska filnamn i olika mappar, namnbyte bevarar de stödda relationerna och sökning hittar innehåll även i anteckningar som användaren aldrig öppnat.
+
+### Etapp 3: kunskapsstruktur
+
+Leverera taggar, egenskaper, mallar, dagliga anteckningar, favoriter och tabellvyer. Utöka stödet för rubriklänkar, blockreferenser och inbäddningar med en tydlig kompatibilitetslista.
+
+Klart när användaren kan skapa anteckningar från mallar och filtrera en tabell över dem utifrån egenskaper som sparas portabelt i repositoryt.
+
+### Etapp 4: visuella vyer
+
+Leverera lokal och global graf samt Canvas med grundläggande kort och kopplingar. Canvas ska ha ett dokumenterat filformat och samma tillförlitliga sparflöde som anteckningar.
+
+Klart när grafens relationer motsvarar de indexerade länkarna och en sparad Canvas kan öppnas på en annan enhet med rätt innehåll, placeringar och kopplingar.
+
+### Etapp 5: offline, historik och driftsättning
+
+Slutför offlineöppning, köade ändringar, historik, återställning, mobilanpassning, tillgänglighet och prestandaverifiering. Grundläggande skydd av utkast och hantering av nätfel ska redan finnas från etapp 1.
+
+Klart när en tidigare hämtad samling kan användas offline, ändringar kan sparas efter återanslutning utan dataförlust och en äldre version kan återställas som en ny commit. Förbered och dokumentera driftsättning enligt användarens val av miljö.
+
+## 13. Verifiering som ska prioriteras
+
+Testa beteenden som kan förlora eller förvanska användarens information:
+
+- Spara, ladda om och läsa innehållet från GitHub igen.
+- Fortsätta skriva medan en sparning pågår.
+- Förlorad anslutning före, under och efter en skrivning.
+- Utkast som överlever omladdning och en utgången session.
+- Konflikter mellan två sessioner och ändringar direkt på GitHub.
+- Skapa, flytta, byta namn på och radera filer, inklusive svenska tecken och mellanslag.
+- Konto-, repository- och grenbyte utan sammanblandade utkast eller privat cache.
+- Återställning ur historiken utan omskrivning av befintlig historik.
+- Bevarande av okänd Markdown, frontmatter och Obsidian-syntax.
+- Sökindex och bakåtlänkar efter filändringar, namnbyten och borttagning.
+- Skydd mot skript i förhandsvisning och filoperationer utanför vald arbetsyta.
+
+Kombinera relevanta automatiserade tester med verifiering i en riktig webbläsare. Kontrollera det fullständiga flödet från gränssnitt till GitHub och tillbaka. Använd ett särskilt testrepository för ändrande integrationstester. Redovisa vad som verifierats mot riktig GitHub och vad som enbart testats med simulerade svar.
+
+## 14. Arbetssätt och leveranskrav till AI:n
+
+- Gör rimliga, reversibla implementationval själv och dokumentera dem kortfattat.
+- Fråga när nödvändig information, kontoåtkomst eller ett betydelsefullt produktbeslut verkligen saknas.
+- Om GitHub-konfiguration saknas: bygg klart det som går, redovisa exakt vad användaren behöver konfigurera och håll verklig integration skild från ett eventuellt demoläge.
+- Hårdkoda aldrig åtkomstuppgifter och be inte om hemligheter i dokument eller kod.
+- Undvik ombyggnader av orelaterade delar av ett befintligt projekt.
+- Låt inte avancerade vyer skjuta upp tillförlitlig sparning.
+- Presentera varje färdig etapp med vad som fungerar, hur det testats och vad som återstår.
+- Utge inte en delvis färdig lösning för att uppfylla hela dokumentet.
+
+Projektet ska få:
+
+1. Körbar källkod och tydliga instruktioner för lokal start.
+2. README med arkitektur, konfiguration, GitHub App-inställningar och driftsättning.
+3. Exempel på miljövariabler utan hemliga värden.
+4. Dokumentation av filformat, kompatibilitet, sparning och konflikthantering.
+5. Relevanta tester och en kort rapport över faktisk verifiering.
+6. En tydlig lista över kvarvarande arbete och kända begränsningar.
+
+## 15. Officiella källor att kontrollera vid implementation
+
+Underlaget sammanställdes 2026-09-19. Kontrollera aktuell dokumentation och versioner innan tekniska detaljer låses.
+
+- Obsidian, produktöversikt: https://obsidian.md/
+- Obsidian, interna länkar: https://obsidian.md/help/links
+- Obsidian, egenskaper: https://obsidian.md/help/properties
+- Obsidian, Bases-format: https://obsidian.md/help/bases/syntax
+- Obsidian, Canvas: https://obsidian.md/help/plugins/canvas
+- CodeMirror: https://codemirror.net/
+- GitHub Apps: https://docs.github.com/en/apps/overview
+- GitHub, API för filer: https://docs.github.com/en/rest/repos/contents
+- GitHub, Git-objekt och commits via API: https://docs.github.com/en/rest/guides/using-the-rest-api-to-interact-with-your-git-database
+- GitHub, API-begränsningar: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+- MDN, IndexedDB: https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB
+- MDN, service workers: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers
+- MDN, lagringsgränser: https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
+
+## 16. Börja här
+
+Läs projektets befintliga instruktioner och inspektera miljön. Föreslå därefter kortfattat en konkret teknisk grund som följer detta underlag och börja genomföra etapp 0 och 1. Fortsätt med övriga etapper i ordning. Den första milstolpen är en fungerande webbredigerare som faktiskt kan läsa och spara anteckningar i användarens GitHub-repository med bevarade utkast och korrekt konflikthantering.
+
+
+## 17. Tillägg 2026-09-19: lagringssätt och skrivbordsapp
+
+Användaren ska kunna välja mellan vanliga Markdown-filer i ett GitHub-repository och sidor i repositoryts GitHub Wiki. Wiki är ett separat .wiki.git-repository och ska ha egen adapter för Git-läsning och skrivning. Contents API för vanliga repositoryfiler ska inte antas fungera för Wiki. Konto, lagringssätt, repository, gren och sökväg ska ingå i avgränsningen av utkast, cache och pågående sparningar. Båda lägena använder samma editor, sparstatus och konfliktgranskning. Första Wiki-sidan skapas på GitHub, och den faktiska standardgrenen används. Behörighetskrav och stödbegränsningar ska framgå före användning. Riktig privat Wiki-åtkomst måste acceptanstestas separat.
+
+Användaren har valt Tauri för en nedladdningsbar skrivbordsapp. Första målplattform är Windows x64. Editorn och lokala utkast ska kunna öppnas utan att vänta på GitHub. Första implementationen får återanvända Node-koden som medföljande synkningsprocess via privat IPC. Ingen lokal webbserver eller användarinstallerad Node ska behövas. GitHub App device flow används för skrivbordet och token lagras i operativsystemets säkra lagring; client secrets får inte paketeras. Installerbar app, faktiskt uppmätt/verifierat beteende och kvarvarande begränsningar ska hållas åtskilda i leveransrapporten.

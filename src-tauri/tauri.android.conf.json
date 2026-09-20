@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "se.gitbsidian.mobile",
+  "version": "0.3.1",
+  "build": {
+    "beforeDevCommand": "npm run desktop:dev -- --host 0.0.0.0",
+    "beforeBuildCommand": "npm run android:prepare && npm run desktop:frontend"
+  },
+  "bundle": { "externalBin": [], "resources": [], "targets": "all", "android": { "minSdkVersion": 28 } }
+}
