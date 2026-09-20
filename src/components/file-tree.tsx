@@ -17,5 +17,5 @@ export function FileTree({ paths, active, dirtyPaths, onOpen }: { paths: string[
       {/\.csv$/i.test(path) ? <Table2 size={16} /> : <FileText size={16} />}<span>{path.split("/").pop()?.replace(/\.md$/i, "")}</span>{dirtyPaths.has(path) && <i className="draft-dot" aria-label="Osparat till GitHub" />}
     </button>)}
   </>;
-  return <nav className="file-tree" aria-label="Anteckningar">{render(root)}</nav>;
+  return <nav className="file-tree" aria-label="Filer">{render(root)}</nav>;
 }

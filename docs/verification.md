@@ -1,5 +1,29 @@
 # Verifieringsrapport
 
+## Installationsrelease 0.3.2 — 2026-09-20
+
+Funktionerna nedan paketeras i nand 0.3.2. Versionsnummer i npm, Cargo och Tauri är synkroniserade. Funktionsverifieringen nedan genomfördes före versionshöjningen; Windows-installationsbygget byggs separat med produktidentiteten oförändrad.
+
+## Riktiga lokala filer och förenklat gränssnitt — utveckling efter 0.3.1, 2026-09-20
+
+Windows-appen använder Dokument/nand för den lokala Markdown/CSV-samlingen och visar **Öppna i Utforskaren** med den faktiska mappen. Befintliga IndexedDB-utkast bevaras och skrivs ut till filer, med konflikt vid annat befintligt innehåll. Externa filer upptäcks genom omläsning. Import, export, uppdatering, dokumentinformation och anslutning från lokalt läge ligger i **Fler alternativ**; skriv-/läsläge ligger i toppfältet. Den dubbla dokumentfliken och det lokala informationsfältet är borttagna, och synköversikten är mindre framträdande.
+
+Verifierat: Next.js-produktionsbygge/TypeScript, ESLint, 17 enhetstester för utkast/lokala filer samt samtliga 41 Edge-tester. De sex nya enhetstesterna omfattar migrering, exakt text/BOM/radslut, namnkonflikter, externa ändringar/raderingar, diskfel, förlorade svar och fortsatt skrivande under sparning. Menytestet verifierar dolda sekundära funktioner, tangentbordsnavigation, Escape/fokusåtergång, klick utanför menyn och dokumentinformation. Desktop- och mobilbilder har granskats.
+
+Den avslutande Tauri-körningen använder en unik `se.gitbsidian.verification…`-identitet, separat WebView-profil och en egen filmapp under testappens datamapp. Åtta starter är godkända utan console/page errors. Riktiga filkontroller verifierar att text finns på disk efter stängning, att offlineändringar sparas, att en CSV som skapats direkt i mappen upptäcks och kan redigeras tillbaka till samma fil, att fel bastext inte skriver över filen och att `../` avvisas. Utforskar-knappens målsökväg jämförs med den mapp som faktiskt används. Själva Explorer-fönstret startas inte i automatiseringen. Rapport: `artifacts/desktop-verification-local-files.json`. Användarens installerade app, inloggning och Dokument-mapp används inte av testet.
+
+Filsparning har ett beständigt utkast innan native-anropet. Den nya filversionen skrivs till temporär fil innan namnbyte, med innehållskontroll före skrivning och före ersättning. Detta är inte en atomisk transaktion med andra redigeringsprogram; se dokumenterade begränsningar i `docs/desktop.md`. Ingen ny installationsrelease har byggts/publicerats i denna ändring.
+
+## Arbetsyte-länkar och filimport — utveckling efter 0.3.1, 2026-09-20
+
+Anslutna arbetsytor har en direktlänk till repositoryt eller wikin. Markdown och CSV visas i samma fillista, och den tidigare knappen **Öppna lokal CSV** är ersatt av **Importera fil**. Import läggs i aktiv lokal skrivyta eller vald GitHub-gren/undermapp; Wiki tar emot Markdown. Namnkonflikter ger numrerade kopior, inklusive när en befintlig fjärrfil ännu inte kunnat hämtas. Byte av arbetsyta och native-stängning inväntar pågående import och lokal lagring.
+
+Next.js-produktionsbygge, TypeScript och ESLint är godkända. 23 olika Edge-tester är godkända: sju CSV-tester, åtta arbetsytevalstester, fem nya importtester samt tre befintliga tester för Markdown, mobilvy och sparskydd. Importtesterna kontrollerar filväljare, BOM/radslut, dubblettnamn, befintlig CSV i fillistan, offlineimport/omladdning, rätt mål för repository/Wiki, ogiltiga filtyper/storlek/UTF-8 och att import slutförs innan navigation. GitHub-svar och skrivningar är simulerade. Repository-länk och import har även granskats visuellt i desktop- och mobilstorlek; mobilkontrollen inväntar menyanimationen och verifierar att kontrollerna ligger helt inom skärmen.
+
+Tauri/WebView2-testet är godkänt med åtta starter i separat verifieringsbygge och egen dataprofil, inklusive CSV-import via den gemensamma importfunktionen och återläsning efter offlineomstart. Inga console/page errors. Rapport: `artifacts/desktop-verification-file-import.json`. Ingen riktig GitHub-inloggning eller innehållsskrivning gjordes, och den installerade appens profil användes inte.
+
+Ändringarna är ännu inte paketerade eller publicerade som ny installationsrelease. Den befintliga releasen 0.3.1 och dess kontrollsumma är oförändrade.
+
 ## Namnbyte till nand 0.3.1 — 2026-09-20
 
 Synligt appnamn är **nand**, med underraden **Notes and more**. Startsida, sidfot, editor, titel/metadata, desktop-inställningar, npm-paket och Tauri-produktnamn är uppdaterade. Projektets `origin` är kopplat till befintliga `https://github.com/joeriks/nand.git`. Ingen commit eller uppladdning av källkod gjordes vid namnbytet.

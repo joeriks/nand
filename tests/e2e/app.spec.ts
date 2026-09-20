@@ -1,3 +1,4 @@
+import { openActions } from "./actions";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createHash } from "node:crypto";
 
@@ -21,7 +22,7 @@ test("local editing survives reload, renders Markdown safely, and exports", asyn
   await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
   await expect(editor).toContainText("[[Behåll|okänd syntax]]");
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Exportera Markdown" }).click();
+  await openActions(page); await page.getByRole("button", { name: "Exportera Markdown" }).click();
   expect((await download).suggestedFilename()).toBe("Min första anteckning.md");
   expect(errors).toEqual([]);
 });
@@ -48,7 +49,7 @@ test("storage failure keeps the editor visible until the user can export", async
   await page.getByRole("button", { name: "nand", exact: true }).click();
   await expect(editor).toContainText("Viktigt osparat arbete");
   await expect(page.getByRole("alert").filter({ hasText: "Utkastet kunde inte lagras" })).toContainText("Exportera texten innan du lämnar");
-  const download = page.waitForEvent("download"); await page.getByRole("button", { name: "Exportera Markdown" }).click(); await download;
+  const download = page.waitForEvent("download"); await openActions(page); await page.getByRole("button", { name: "Exportera Markdown" }).click(); await download;
 });
 test("a second tab cannot overwrite an active local draft", async ({ page, context }) => {
   const editor = await localEditor(page); await editor.fill("# Första flikens utkast");

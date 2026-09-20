@@ -109,7 +109,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![backend_request, export_markdown])
+        .invoke_handler(tauri::generate_handler![backend_request, export_markdown, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::open_local_folder])
         .run(tauri::generate_context!())
         .expect("Appen kunde inte startas");
 }

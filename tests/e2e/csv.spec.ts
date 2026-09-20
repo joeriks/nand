@@ -1,3 +1,4 @@
+import { openActions } from "./actions";
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -5,12 +6,13 @@ import { createHash } from "node:crypto";
 const content = '\ufeffID;Namn;Antal;Pris;Datum\r\n00123;Åsa;10;1,25;2026-09-20\r\n00456;Bertil;2;ok;20/09/2026\r\n';
 async function localCsv(page: Page, text = content, name = "data.csv") {
   await page.goto("/"); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
-  await page.getByLabel("CSV-fil från datorn").setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from(text) });
+  await expect(page.getByLabel("Fil att importera")).toBeEnabled();
+  await page.getByLabel("Fil att importera").setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from(text) });
   await expect(page.getByRole("region", { name: "CSV-redigerare" })).toBeVisible();
   await expect(page.getByLabel("Rad 1, ID", { exact: true })).toBeEditable();
 }
 async function exported(page: Page) {
-  const wait = page.waitForEvent("download"); await page.getByRole("button", { name: "Exportera CSV" }).click();
+  const wait = page.waitForEvent("download"); await openActions(page); await page.getByRole("button", { name: "Exportera CSV" }).click();
   const download = await wait;
   return { name: download.suggestedFilename(), text: await readFile((await download.path())!, "utf8") };
 }
@@ -61,7 +63,7 @@ test("editing a sorted and filtered CSV changes the correct source row, supports
 
 test("local CSV import does not overwrite existing files and handles malformed files in the raw editor", async ({ page }) => {
   await localCsv(page);
-  await page.getByLabel("CSV-fil från datorn").setInputFiles({ name: "data.csv", mimeType: "text/csv", buffer: Buffer.from('ID,Namn\n9,"unfinished') });
+  await page.getByLabel("Fil att importera").setInputFiles({ name: "data.csv", mimeType: "text/csv", buffer: Buffer.from('ID,Namn\n9,"unfinished') });
   await expect(page.getByRole("heading", { name: "data (2)", exact: true })).toBeVisible();
   await expect(page.locator('.csv-editor [role="alert"]')).toContainText("citattecken");
   await page.getByRole("button", { name: "CSV-text", exact: true }).click();

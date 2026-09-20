@@ -96,7 +96,7 @@ export function DesktopApp() {
   const authenticatedUser = session?.user?.id === localUser?.id ? session?.user : null;
   return <>
     <BackgroundSync user={localUser} activeScope={opened && opened !== "local" ? workspaceKey(opened.workspace) : null} />
-    {restoring || restoreError || !opened ? <WorkspaceRecovery loading={restoring} error={restoreError} onRetry={() => void restore()} onChoose={() => setConnection(true)} /> : <Workbench key={opened === "local" ? "local" : `${localUser?.id}:${workspaceKey(opened.workspace)}`} opened={opened} user={localUser} dark={dark} onTheme={toggleTheme} onHome={() => setOpened("local")} onLocal={() => setOpened("local")} onWorkspace={() => setConnection(true)} onLogout={logout} desktop onReconnect={() => { setConnection(true); void startLogin(); }} />}
+    {restoring || restoreError || !opened ? <WorkspaceRecovery loading={restoring} error={restoreError} onRetry={() => void restore()} onChoose={() => setConnection(true)} /> : <Workbench key={opened === "local" ? "local" : `${localUser?.id}:${workspaceKey(opened.workspace)}`} opened={opened} user={localUser} dark={dark} onTheme={toggleTheme} onHome={() => setOpened("local")} onWorkspace={() => setConnection(true)} onLogout={logout} desktop onReconnect={() => { setConnection(true); void startLogin(); }} />}
     {connection && <Dialog title="Dina arbetsytor" onClose={() => { setConnection(false); void cancelLogin(); }}>
       {settings ? <form onSubmit={event => { event.preventDefault(); void saveSettings(); }}>
         <p>Anslut din GitHub App. Aktivera <strong>Device flow</strong> och ge appen <strong>Contents: read & write</strong>. Installera den på de repositories du vill använda.</p>

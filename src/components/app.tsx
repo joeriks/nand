@@ -67,7 +67,7 @@ export function App() {
     <BackgroundSync user={localUser} activeScope={opened && opened !== "local" ? workspaceKey(opened.workspace) : null} />
     {restoring || restoreError ? <WorkspaceRecovery loading={restoring} error={restoreError} onRetry={() => void restore()} onChoose={() => { if (localUser) setOfflinePicker(true); else setPicker(true); }} /> : opened ? <Workbench key={opened === "local" ? "local" : `${localUser?.id}:${workspaceKey(opened.workspace)}`} opened={opened} user={localUser} dark={dark} onTheme={toggleTheme}
       onWorkspace={() => { if (localUser) setOfflinePicker(true); else { setOpened(null); setSetup(true); } }}
-      onLogout={logout} onLocal={() => setOpened("local")} onHome={() => setOpened(null)} /> :
+      onLogout={logout} onHome={() => setOpened(null)} /> :
       <main className="landing">
         <header className="landing-header"><Link className="brand" href="/"><span className="brand-symbol"><Layers3 size={22} /></span>{sv.name}<span className="beta">{sv.tagline}</span></Link><a className="quiet-link" href="https://github.com/joeriks/nand" target="_blank" rel="noreferrer">Projektet på GitHub <ArrowUpRight size={15} /></a></header>
         <section className="landing-content">

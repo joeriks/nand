@@ -21,9 +21,23 @@ Byggdatorn behöver [Rust, Microsoft C++ Build Tools och WebView2](https://v2.ta
 
 I appen: **Anslut GitHub → Konfigurera GitHub App**. Ange Client ID och appens namn från GitHub-adressen. Aktivera **Device flow** i GitHub-appens inställningar. Godkänn sedan engångskoden i din vanliga webbläsare. Desktop använder inga client secrets eller webbservercookies. Användartoken sparas i Windows Credential Manager och lämnar inte den privilegierade Rust-/Node-delen. Ny inloggning behövs för nätverksåtkomst efter högst åtta timmar; hämtade anteckningar går fortsatt att redigera lokalt. Se [skrivbordsarkitekturen](docs/desktop.md).
 
+## Filer och import
+
+Dessa funktioner ingår i version 0.3.2.
+
+I Windows-appen är den lokala skrivytan en riktig **nand**-mapp under användarens **Dokument**. Länken **Öppna i Utforskaren** öppnar exakt den mappen. Markdown- och CSV-filer i undermappar läses in, nya filer upptäcks och redigeringar sparas automatiskt. Appen kontrollerar mappen ungefär varannan sekund och när den får fokus. Befintliga lokala utkast sparas ut till filer; om samma namn redan har annat innehåll visas en jämförelse. Utkasten ligger kvar som skydd i appens databas. Ändringar/radering utanför appen jämförs med det öppnade innehållet innan sparning. Den vanliga webbversionen behåller sin webbläsarlagring och visar ingen Utforskar-länk.
+
+**Fler alternativ** (⋯) samlar import, export, uppdatering och dokumentinformation. Sökning, ny anteckning, filval och skriv-/läsläge ligger kvar direkt i arbetsytan.
+
+Den anslutna arbetsytan har en direktlänk till sitt repository eller sin wiki på GitHub. Befintliga Markdown- och CSV-filer visas tillsammans i fillistan. CSV-filer öppnas automatiskt i tabellredigeraren.
+
+**Importera fil** lägger en UTF-8-fil på högst 1 MiB i den valda arbetsytan: Markdown (`.md`) eller CSV (`.csv`) i lokal skrivyta/repository, och Markdown i Wiki. I repositoryläget används vald gren och undermapp. GitHub-importer går genom den vanliga synkkön; lokala importer stannar i den lokala skrivytan. Ett upptaget filnamn får ett nytt namn, utan att befintlig fil skrivs över. Originalfilen på datorn påverkas inte.
+
+Den lokala mappen är tills vidare fast, inte valbar. Den stöder högst 500 Markdown/CSV-filer och 16 MiB text totalt, med högst 1 MiB per fil. Filer ska vara UTF-8; binär text, otillgängliga filer och överskridna gränser ger ett läs-/sparfel medan utkasten bevaras. `.git`, `.obsidian`, appens temporära filer och symboliska länkar tas inte med. Importen kopierar till nand-mappen, den skapar ingen permanent koppling till originalfilen.
+
 ## CSV-redigerare
 
-Öppna `.csv`-filer direkt i repositoryts filträd, eller välj **Öppna lokal CSV** för en fil från datorn. Lokala filer öppnas som beständiga arbetskopior i den lokala skrivytan; **Exportera CSV** sparar en fil. Originalfilen skrivs inte över vid import. En import med befintligt namn får ett nytt namn. Lokala kopior laddas inte upp automatiskt till GitHub. CSV i en GitHub-arbetsyta använder samma offlinekö, behörighetskontroll och konflikthantering som Markdown. Wiki stöder fortsatt endast Markdown.
+Öppna `.csv`-filer direkt i arbetsytans fillista. **Importera fil** lägger till en fil från datorn enligt ovan. **Exportera CSV** sparar arbetskopian till en fil på datorn. CSV i en GitHub-arbetsyta använder samma offlinekö, behörighetskontroll och konflikthantering som Markdown. Wiki stöder fortsatt endast Markdown.
 
 Tabellvyn har global sökning, filter per kolumn, sortering, radredigering, lägg till/ta bort rad samt ångra/gör om (de senaste 20 ändringarna i den öppna tabellen). Växla till **CSV-text** för att redigera källtext eller rätta en fil som inte kan tolkas. Filter och sortering ändrar endast vyn: sparning och export bevarar samtliga rader i deras filordning.
 

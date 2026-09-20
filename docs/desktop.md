@@ -22,11 +22,17 @@ Desktop använder GitHub Apps dokumenterade device flow. Användaren matar in of
 
 Rust lagrar token och användaridentitet i Windows Credential Manager via keyring. Svarens interna sessionsfält konsumeras av Rust och skickas aldrig till WebView. Frontend får bara användaridentitet, status och resultat. Logout tar bort inloggningen ur Credential Manager. Inställningarna `github.json` i appens lokala datamapp innehåller endast offentliga appuppgifter.
 
-Rust erbjuder ett begränsat API-anrop och export av Markdown/CSV med native spara-dialog. Endast lokala huvudfönstret har capabilities. Inga allmänna shell- eller filsystemsbehörigheter ges till frontend. Backend tar enbart emot privata JSON-meddelanden via stdin/stdout och utför fasta API-rutter; godtyckliga program, adresser eller serverkommandon kan inte skickas in. Barnprocessen ärver varken NODE_OPTIONS, proxyinställningar eller Git-traceloggar. Standardfel exponeras inte för gränssnittet.
+Rust erbjuder ett begränsat API-anrop, lokal fillagring i Dokument/nand och export av Markdown/CSV med native spara-dialog. Endast lokala huvudfönstret har capabilities. Frontend får inte välja någon godtycklig rotmapp eller något program genom filkommandona. Lokala kommandon validerar relativa sökvägar, filtyp, storlek och att målet stannar i samlingen. Backend tar enbart emot privata JSON-meddelanden via stdin/stdout och utför fasta API-rutter; godtyckliga program, adresser eller serverkommandon kan inte skickas in. Barnprocessen ärver varken NODE_OPTIONS, proxyinställningar eller Git-traceloggar. Standardfel exponeras inte för gränssnittet.
 
 Repositorymedlemskap verifieras på GitHub inför varje nätverksoperation. Återöppning av en cachad arbetsyta registrerar endast det lokala valet; den hoppar inte över nästa behörighetskontroll. Wiki använder samma Git-adapter som webben och kräver Git for Windows. Befintlig installation under Program Files känns igen. Git behöver inte finnas för lokal skrivyta eller vanliga repositoryfiler.
 
 ## Lokal data och stängning
+
+Version 0.3.2 lagrar den lokala samlingen som vanliga `.md`- och `.csv`-filer i användarens Dokument/nand, med **Öppna i Utforskaren** under arbetsytans namn. Windows mappupplösning används även när Dokument är omdirigerad. Befintliga lokala utkast flyttas inte eller raderas: de skrivs till filer och behålls som redigeringsbuffert i IndexedDB. Om en fil med samma namn har annat innehåll visas konflikt utan automatisk överskrivning. Nya/ändrade filer upptäcks vid fokus och ungefär varannan sekund. Extern radering kräver ett granskat beslut innan filen återskapas. Mappen är ännu inte valbar; se README för storleksgränser.
+
+Lokala skrivningar kontrollerar förväntat innehåll och använder en temporär fil i samma mapp, följt av namnbyte. Nya filnamn skapas utan att ersätta ett befintligt namn. Filsystemet behöver stödja hårda länkar för skapandet (som NTFS); ett fel lämnar utkastet kvar. Ändringar utanför appen kontrolleras igen före ersättning. Det finns ingen gemensam transaktion med andra redigeringsprogram, så samtidiga skrivningar från andra program bör undvikas. Vid skrivfel bevaras utkastet och appens normala stängning visar felet.
+
+Import, export, uppdatering, GitHub-anslutning från lokalt läge och dokumentinformation finns under **Fler alternativ**. Skriv-/läsläge är flyttat till toppfältet; den dubbla dokumentfliken och de permanenta förklaringsblocken är borttagna/förenklade.
 
 IndexedDB och tema lagras i Tauri-appens egen WebView-profil, separat från Edge/Chrome och den tidigare webbappen. Lokala utkast är okrypterade, avgränsade per konto/lagringssätt/arbetsyta och kräver samma Windows-profil. Appens kontoavgränsning skyddar inte mot någon med åtkomst till datorns profilfiler. Exportera viktigt innehåll eller spara till GitHub.
 
@@ -34,7 +40,7 @@ Appen återöppnar senast aktivt valda GitHub-arbetsyta från lokal cache, utan 
 
 Stängning väntar på en pågående sparning och lokala IndexedDB-skrivningar. Vid lagringsfel bevaras fönstret och export erbjuds. En andra start fokuserar det befintliga fönstret. Export använder native spara-dialog med en uttryckligt vald filsökväg.
 
-CSV-redigeraren använder samma lokala lagring och synkkö. **Öppna lokal CSV** skapar en beständig arbetskopia i den lokala skrivytan. **Exportera CSV** sparar kopian via native spara-dialog; importen ger ingen permanent koppling till originalfilen. Kolumntyper och tabellinställningar sparas per fil i den lokala WebView-profilen. Felaktiga värden markeras men konverteras inte och blockerar inte sparning.
+CSV-redigeraren använder samma lokala lagring och synkkö. Befintliga CSV-filer visas i arbetsytans fillista. **Importera fil** skapar en beständig arbetskopia i den aktiva arbetsytan: Markdown/CSV lokalt eller i repositoryts valda gren/undermapp, och Markdown i Wiki. GitHub-importer synkas automatiskt när anslutning och behörighet finns. Befintliga filnamn får en numrerad kopia i stället för att skrivas över. **Exportera CSV** sparar kopian via native spara-dialog; importen ger ingen permanent koppling till originalfilen. Kolumntyper och tabellinställningar sparas per fil i den lokala WebView-profilen. Felaktiga värden markeras men konverteras inte och blockerar inte sparning. Länken under arbetsytans namn öppnar repositoryt eller wikin i systemets webbläsare.
 
 ## Officiella källor
 
@@ -45,6 +51,6 @@ CSV-redigeraren använder samma lokala lagring och synkkö. **Öppna lokal CSV**
 
 ## Isolerad native-verifiering
 
-`npm run test:desktop` bygger samma kod som release med identifieraren `se.gitbsidian.verification` och ett separat Cargo-mål under `src-tauri/target/verification`. Datamapp och Credential Manager-tjänst följer appidentifieraren. Testet använder dessutom en ny WebView-profil för varje körning. Den vanliga identifieraren `se.gitbsidian.desktop` och dess befintliga inloggning är oförändrade. Testbygget distribueras inte.
+`npm run test:desktop` bygger samma kod med en unik identifierare under `se.gitbsidian.verification…` och ett separat Cargo-mål under `src-tauri/target/verification`. Datamapp och Credential Manager-tjänst följer appidentifieraren. Testet använder dessutom en ny WebView-profil för varje körning. Alternativa appidentiteter lagrar lokala filer under sin egen appdatamapp, aldrig i användarens Dokument/nand. Den vanliga identifieraren `se.gitbsidian.desktop` och dess befintliga inloggning är oförändrade. Testbygget distribueras inte.
 
 Testet avbryts om verifieringsidentiteten redan har en giltig eller utgången credential. Syntetisk cache används enbart i testprofilen. Inga testkommandon, autentiseringsgenvägar eller simulerade GitHub-svar läggs i produktionsappen. Installationsfilen byggs separat med `npm run desktop:build`.

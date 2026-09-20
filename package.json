@@ -1,6 +1,6 @@
 {
   "name": "nand",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Notes and more — samla, organisera och redigera din kunskap",
   "repository": { "type": "git", "url": "https://github.com/joeriks/nand.git" },
   "private": true,

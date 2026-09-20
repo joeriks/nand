@@ -1,14 +1,15 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { chromium, expect } from "@playwright/test";
 import { performance } from "node:perf_hooks";
 
 // A separate bundle identifier also isolates native credentials and backend settings.
 // No test flags, fake authentication or transport bypasses are added to the app.
 const targetDirectory = resolve("src-tauri/target/verification");
+const verificationIdentity = `se.gitbsidian.verification${Date.now()}`;
 await new Promise((resolveBuild, reject) => {
-  const build = spawn(process.execPath, ["scripts/tauri.mjs", "build", "--no-bundle", "--config", JSON.stringify({ identifier: "se.gitbsidian.verification", productName: "nand verification" })], { windowsHide: true, stdio: "inherit", env: { ...process.env, CARGO_TARGET_DIR: targetDirectory } });
+  const build = spawn(process.execPath, ["scripts/tauri.mjs", "build", "--no-bundle", "--config", JSON.stringify({ identifier: verificationIdentity, productName: "nand verification" })], { windowsHide: true, stdio: "inherit", env: { ...process.env, CARGO_TARGET_DIR: targetDirectory } });
   build.once("error", reject);
   build.once("exit", code => code === 0 ? resolveBuild() : reject(new Error(`Verification build failed: ${code}`)));
 });
@@ -70,6 +71,32 @@ try {
   // Never run synthetic-account/logout checks against an actual saved credential.
   expect(session.data.user).toBeNull(); expect(session.data.localUser).toBeNull();
   expect(JSON.stringify(session)).not.toMatch(/access_token|client_secret|"token"/);
+  const localFiles = await app.page.evaluate(() => window.__TAURI_INTERNALS__.invoke("local_snapshot"));
+  expect(localFiles.directory).toContain("se.gitbsidian.verification");
+  await expect(app.page.getByRole("button", { name: "Öppna i Utforskaren", exact: true })).toHaveAttribute("title", localFiles.directory);
+  const guardedPath = await app.page.evaluate(async () => {
+    try { await window.__TAURI_INTERNALS__.invoke("local_save", { path: "../outside.md", text: "must not write", expected: null }); return false; }
+    catch { return true; }
+  });
+  expect(guardedPath).toBe(true);
+  const nativePath = `Native-guard-${Date.now()}.md`;
+  const compareAndSave = await app.page.evaluate(async path => {
+    const invoke = window.__TAURI_INTERNALS__.invoke;
+    const first = await invoke("local_save", { path, text: "# Original", expected: null });
+    const conflict = await invoke("local_save", { path, text: "Must not overwrite", expected: "wrong base" });
+    const updated = await invoke("local_save", { path, text: "# Updated", expected: "# Original" });
+    return { first, conflict, updated };
+  }, nativePath);
+  expect(compareAndSave.first.saved).toBe(true);
+  expect(compareAndSave.conflict).toEqual({ saved: false, text: "# Original" });
+  expect(compareAndSave.updated.saved).toBe(true);
+  expect(await readFile(join(localFiles.directory, nativePath), "utf8")).toBe("# Updated");
+  const externalCsv = `External-${Date.now()}.csv`;
+  await writeFile(join(localFiles.directory, externalCsv), "ID,Value\n00123,External\n");
+  await app.page.getByTitle(externalCsv, { exact: true }).click();
+  await expect(app.page.getByLabel("Rad 1, ID", { exact: true })).toHaveValue("00123");
+  await app.page.getByLabel("Rad 1, Value", { exact: true }).fill("Edited in nand");
+  await expect.poll(() => readFile(join(localFiles.directory, externalCsv), "utf8")).toContain("Edited in nand");
   await app.page.getByRole("button", { name: "Ny anteckning" }).first().click();
   const noteName = `Verifiering ${Date.now()}`;
   await app.page.getByRole("textbox", { name: "Namn och eventuell mapp" }).fill(`${noteName}.md`);
@@ -83,16 +110,18 @@ try {
   await expect(app.page.locator(".markdown-preview strong")).toHaveText("mina idéer");
   // Close immediately after editing: the native close hook must drain local persistence.
   await close(app); app = undefined;
+  expect(await readFile(join(localFiles.directory, `${noteName}.md`), "utf8")).toBe(content);
   app = await launch(); const secondReadyMs = app.readyMs;
   await expect(app.editor).toContainText("[[Bevara min syntax]]");
   await app.context.setOffline(true);
   await app.editor.fill(content + "\n\nÄven utan internet.");
-  await expect(app.page.getByRole("status")).toContainText("Offline");
+  await expect.poll(() => readFile(join(localFiles.directory, `${noteName}.md`), "utf8")).toContain("Även utan internet.");
   await app.context.setOffline(false);
+  await app.page.getByLabel("Fler alternativ", { exact: true }).click();
   await app.page.getByRole("button", { name: "Anslut GitHub" }).click();
   await expect(app.page.getByRole("dialog", { name: "Dina arbetsytor" })).toBeVisible();
   await app.page.getByRole("button", { name: "Stäng", exact: true }).click();
-  await app.page.getByLabel("CSV-fil från datorn").setInputFiles({ name: "native-data.csv", mimeType: "text/csv", buffer: Buffer.from("ID,Antal,Pris\n00123,10,1.25\n00456,2,fel\n") });
+  await app.page.getByLabel("Fil att importera").setInputFiles({ name: "native-data.csv", mimeType: "text/csv", buffer: Buffer.from("ID,Antal,Pris\n00123,10,1.25\n00456,2,fel\n") });
   await expect(app.page.getByLabel("Rad 1, ID", { exact: true })).toHaveValue("00123");
   await app.page.getByLabel("Datatyp för Pris").selectOption("decimal");
   await expect(app.page.getByLabel("Rad 2, Pris", { exact: true })).toHaveAttribute("aria-invalid", "true");
@@ -168,7 +197,7 @@ try {
   await expect(app.page.locator(".workspace-button")).toContainText("Min lokala skrivyta");
   expect(errors).toEqual([]);
   await close(app); app = undefined;
-  await writeFile("artifacts/desktop-verification.json", JSON.stringify({ version, checkedAt: new Date().toISOString(), identity: "se.gitbsidian.verification", firstReadyMs, secondReadyMs, checks: ["bundled local UI in separate verification release build", "native RPC and Git capability", "no token in WebView", "Markdown preview", "close flush and restart persistence", "offline editing", "workspace dialog", "CSV import, conservative types, manual type validation, sorted editing and offline restart persistence", "synthetic downloaded workspace with no valid credential", "offline navigation after native restart and durable queue", "last explicit Wiki selection and read-only selected note survive offline restart despite newer repository cache", "switching back to repository preserves branch, root and queued draft on offline restart", "explicit logout stays revoked on restart"], github: "synthetic cache; no live GitHub authentication or writes; user's credentials and backend settings isolated by app identifier", errors }, null, 2));
+  await writeFile("artifacts/desktop-verification.json", JSON.stringify({ version, checkedAt: new Date().toISOString(), identity: verificationIdentity, firstReadyMs, secondReadyMs, checks: ["ordinary local files: migration buffer, folder link, external CSV discovery and edit, disk persistence on close and offline, native write conflict and path traversal guards", "bundled local UI in separate verification release build", "native RPC and Git capability", "no token in WebView", "Markdown preview", "close flush and restart persistence", "offline editing", "workspace dialog", "CSV import, conservative types, manual type validation, sorted editing and offline restart persistence", "synthetic downloaded workspace with no valid credential", "offline navigation after native restart and durable queue", "last explicit Wiki selection and read-only selected note survive offline restart despite newer repository cache", "switching back to repository preserves branch, root and queued draft on offline restart", "explicit logout stays revoked on restart"], github: "synthetic cache; no live GitHub authentication or writes; user's credentials and backend settings isolated by app identifier", errors }, null, 2));
   console.log(JSON.stringify({ firstReadyMs, secondReadyMs, errors, result: "passed" }));
 } catch (error) {
   if (app) {
