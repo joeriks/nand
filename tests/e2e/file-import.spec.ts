@@ -57,6 +57,24 @@ function remoteFiles() {
   return { collections, state, install, open };
 }
 
+test("TXT imports as plain text, preserves duplicate names and exports exact contents", async ({ page }) => {
+  await page.goto("/"); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
+  const text = "# Not a heading\r\nPlain <b>text</b>\r\n";
+  const file = { name: "example.TXT", mimeType: "text/plain", buffer: Buffer.from(text) };
+  await page.getByLabel("Fil att importera").setInputFiles(file);
+  await expect(page.getByRole("textbox", { name: "Textfilens innehåll" })).toContainText("# Not a heading");
+  await expect(page.locator(".preview-pane")).toHaveCount(0);
+  await expect(page.getByLabel("Fil att importera")).toBeEnabled();
+  await page.getByLabel("Fil att importera").setInputFiles(file);
+  await expect(page.locator(".breadcrumbs")).toContainText("example (2).TXT");
+  await openActions(page);
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Exportera TXT" }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toBe("example (2).TXT");
+  expect(await readFile((await download.path())!, "utf8")).toBe(text);
+});
+
 test("local file picker imports Markdown without overwriting and retains exact exported contents", async ({ page }) => {
   await page.goto("/"); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
   await expect(page.getByRole("button", { name: "Öppna lokal CSV" })).toHaveCount(0);
@@ -131,7 +149,7 @@ test("invalid, oversized and non-UTF-8 imports do not add files", async ({ page 
   await expect(page.getByLabel("Fil att importera")).toBeEnabled();
   const files = page.getByRole("navigation", { name: "Filer" }).getByRole("button");
   for (const [name, buffer, message] of [
-    ["image.png", Buffer.from("not a text file"), "Markdown- eller CSV-fil"],
+    ["image.png", Buffer.from("not a text file"), "Markdown-, TXT- eller CSV-fil"],
     ["large.md", Buffer.alloc(1024 * 1024 + 1, "x"), "högst 1 MiB"],
     ["invalid.csv", Buffer.from([0xff, 0xfe, 0x41]), "UTF-8"],
     ["binary.md", Buffer.from([65, 0, 66]), "UTF-8"],

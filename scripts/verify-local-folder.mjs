@@ -63,6 +63,15 @@ try {
   }, folderA);
   expect(stale).toBe(true); expect(await readFile(join(folderB, "Shared.md"), "utf8")).toBe("# Collection B\n");
   await writeFile(join(folderB, "Shared.md"), "# External edit\n"); await expect(editor).toContainText("External edit");
+  await writeFile(join(folderB, "Plain.TXT"), "# Plain text\r\n<b>literal</b>\r\n");
+  await page.getByRole("button", { name: "Uppdatera mappen", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Inkludera Plain.TXT", exact: true }).click();
+  const textEditor = page.getByRole("textbox", { name: "Textfilens innehåll" });
+  await expect(textEditor).toBeEditable();
+  await expect(textEditor).toContainText("<b>literal</b>");
+  await expect(page.locator(".preview-pane")).toHaveCount(0);
+  await textEditor.fill("Edited plain text");
+  await expect.poll(() => readFile(join(folderB, "Plain.TXT"), "utf8")).toBe("Edited plain text");
   await writeFile(join(folderB, "Data.csv"), "Name,Value\nExternal,42\n");
   await expect(page.getByRole("button", { name: "Data.csv", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Uppdatera mappen", exact: true }).click();
@@ -86,6 +95,17 @@ try {
   await expect(page.getByRole("checkbox", { name: "Inkludera Unread.md", exact: true })).not.toBeChecked();
   await expect(editor).toContainText("A edited in app");
   await page.screenshot({ path: "artifacts/local-folder-selection.png" });
+  await page.getByRole("button", { name: "Ny anteckning +", exact: true }).click();
+  await page.getByLabel("Namn och eventuell mapp").fill("Created");
+  await page.getByRole("combobox", { name: "Filtyp", exact: true }).selectOption("csv");
+  await page.getByRole("button", { name: "Skapa anteckning", exact: true }).click();
+  await page.getByRole("button", { name: "Lägg till rad", exact: true }).click();
+  await page.getByLabel("Rad 1, Namn", { exact: true }).fill("Native CSV");
+  await expect.poll(() => readFile(join(folderA, "Created.csv"), "utf8").catch(() => "")).toContain("Native CSV");
+  await page.getByRole("button", { name: "Lägg till kolumn", exact: true }).click();
+  await page.getByLabel("Kolumnnamn", { exact: true }).fill("Extra");
+  await page.getByRole("button", { name: "Lägg till", exact: true }).click();
+  await expect.poll(() => readFile(join(folderA, "Created.csv"), "utf8").catch(() => "")).toContain("Namn,Värde,Extra");
   await writeFile("artifacts/local-folder-verification.json", JSON.stringify({ result: "passed", checkedAt: new Date().toISOString(), checks: ["persisted root selection", "separate drafts with same filename", "direct filesystem writes", "external edits of selected files; new CSV requires explicit inclusion", "1005 unopened directories do not block selected files", "invalid unselected file does not block selection", "persistent exclusion without disk deletion", "stale directory save rejected", "reload and return to former root"], nativePickerAutomated: false }, null, 2));
   console.log("Local folder selection, persistence, isolation and direct filesystem checks passed.");
 } finally {

@@ -97,7 +97,8 @@ async fn export_markdown(app: tauri::AppHandle, name: String, text: String) -> R
     if text.len() > 1024 * 1024 || name.len() > 240 || name.contains(['/', '\\', '\0']) { return Err(error("Ogiltigt filnamn eller för stor anteckning.")); }
     tauri::async_runtime::spawn_blocking(move || {
         let is_csv = name.to_lowercase().ends_with(".csv");
-        let Some(file) = app.dialog().file().add_filter(if is_csv { "CSV" } else { "Markdown" }, if is_csv { &["csv"] } else { &["md"] }).set_file_name(name).blocking_save_file() else { return Ok(false); };
+        let is_txt = name.to_lowercase().ends_with(".txt");
+        let Some(file) = app.dialog().file().add_filter(if is_csv { "CSV" } else if is_txt { "Text" } else { "Markdown" }, if is_csv { &["csv"] } else if is_txt { &["txt"] } else { &["md"] }).set_file_name(name).blocking_save_file() else { return Ok(false); };
         let path = file.into_path().map_err(|_| error("Ogiltig filsökväg."))?;
         std::fs::write(path, text.as_bytes()).map_err(|_| error("Kunde inte exportera filen. Utkastet finns kvar."))?;
         Ok(true)

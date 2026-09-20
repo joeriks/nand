@@ -5,7 +5,7 @@ import { seal, unseal } from "@/lib/server/session";
 import { configuration } from "@/lib/server/config";
 afterEach(() => vi.unstubAllEnvs());
 describe("workspace validation", () => {
-  it.each(["../secret.md", "/note.md", "folder/../note.md", "a\\note.md", "a//note.md", ".git/config.md", "%2e%2e/note.md", "note.md?ref=main", "note.md#fragment", "note\u0000.md", "note.txt"])("rejects unsafe path %s", path => {
+  it.each(["../secret.md", "/note.md", "folder/../note.md", "a\\note.md", "a//note.md", ".git/config.md", "%2e%2e/note.md", "note.md?ref=main", "note.md#fragment", "note\u0000.md", "note.exe"])("rejects unsafe path %s", path => {
     expect(pathSchema.safeParse(path).success).toBe(false);
   });
   it("supports Swedish names and spaces inside the selected root", () => { expect(repositoryPath("anteckningar", "Odling/Årets idéer.md")).toBe("anteckningar/Odling/Årets idéer.md"); });

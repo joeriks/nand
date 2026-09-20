@@ -7,7 +7,7 @@ export function validPath(path: string, allowEmpty = false): boolean {
     !path.startsWith("/") && path.split("/").every(part => !!part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
 }
 export const rootSchema = z.string().refine(path => validPath(path, true), "Ogiltig undermapp.");
-export const pathSchema = z.string().refine(path => validPath(path) && /\.(md|csv)$/i.test(path), "Ange en relativ sökväg som slutar med .md eller .csv.");
+export const pathSchema = z.string().refine(path => validPath(path) && /\.(md|txt|csv)$/i.test(path), "Ange en relativ sökväg som slutar med .md, .txt eller .csv.");
 export const branchSchema = z.string().min(1).max(255).refine(value => !/[\u0000-\u0020\u007f~^:?*\[\\]/.test(value) && !value.includes("..") && !value.includes("@{") && !value.startsWith("-") && !value.endsWith("/") && !value.endsWith("."), "Ogiltigt grennamn.");
 export const storageModeSchema = z.enum(["repository", "wiki"]);
 export const workspaceSchema = z.object({ mode: storageModeSchema.default("repository"), repository: z.object({ id: z.number().int().positive(), fullName: z.string(), installationId: z.number().int().positive(), defaultBranch: z.string(), private: z.boolean(), hasWiki: z.boolean().optional() }), branch: branchSchema, root: rootSchema });

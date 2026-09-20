@@ -114,7 +114,7 @@ export class GitHub {
         }
       }
     }
-    return entries.filter(entry => entry.type === "blob" && ["100644", "100755"].includes(entry.mode) && /\.(md|csv)$/i.test(entry.path))
+    return entries.filter(entry => entry.type === "blob" && ["100644", "100755"].includes(entry.mode) && /\.(md|txt|csv)$/i.test(entry.path))
       .map(entry => ({ path: entry.path, sha: entry.sha, size: entry.size || 0 })).sort((a, b) => a.path.localeCompare(b.path, "sv"));
   }
   async read(workspace: Workspace, path: string): Promise<RemoteNote> {

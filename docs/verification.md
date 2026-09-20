@@ -1,5 +1,11 @@
 # Verifieringsrapport
 
+## TXT, filskapande och CSV-kolumner — 0.3.5, 2026-09-20
+
+Godkänt: produktionsbygge/TypeScript, ESLint, 42 enhetstester för säkerhet, repository, wiki och lokala filer samt 16 olika Edge-tester för CSV och import. Filskapandet testas med CSV och TXT. TXT-import/export behåller exakta radslut och hanterar dubblettnamn. CSV-kolumntester verifierar avbruten och bekräftad borttagning, dolda rader, ångra med datatyper, nya kolumner, ojämna rader utan rubrikrad och skydd mot borttagning av sista kolumnen. Bekräftelsedialogen har granskats visuellt.
+
+Windows-regressionen klarade åtta starter utan console/page errors. Det separata rotmappstestet verifierar TXT-val och redigering till samma fil samt skapande av en ny CSV och tillagd kolumn med innehållskontroll direkt på disk. Allt körs med isolerad appidentitet och testmappar. De första webbtestfelen berodde på gammalt frontendbygge respektive testväljare; omkörningar mot aktuellt bygge passerade. OS-filväljare och installation över användarens app automatiseras inte.
+
 ## Valbara lokala filer — 0.3.4, 2026-09-20
 
 Godkänt: Next.js-produktionsbygge/TypeScript, ESLint, 19 enhetstester för lokala filer och utkast samt sex Edge-tester för menyer och import. Windows-regressionen klarade åtta starter utan console/page errors. En tidigare körning fastnade vid stängning; omkörningen med samma binär passerade.

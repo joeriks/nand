@@ -180,3 +180,9 @@ Se [roadmap](docs/roadmap.md) och [format och kompatibilitet](docs/compatibility
 ### Välj lokala filer
 
 I Windows öppnar **Utforska rotmappen** en utforskare som listar en mapp i taget. Kryssa för Markdown- och CSV-filer som ska ingå i samlingen. Bara de valda filerna läses och följs för externa ändringar. Oöppnade undermappar och ovalid text i ej valda filer blockerar inte samlingen. **Visa fler** läser nästa del av en stor katalog. Avmarkering bevarar filen på disken; osparade ändringar och konflikter måste hanteras först. Tidigare lokala anteckningar behålls som valda, och ny/importerad text ingår automatiskt.
+
+## TXT och CSV-kolumner (0.3.5)
+
+Lokala samlingar och repositoryfiler stöder `.md`, `.txt` och `.csv`. TXT öppnas som vanlig text. Välj **Filtyp** när du skapar en ny anteckning för att skapa Markdown, text eller en CSV-tabell; Wiki använder Markdown.
+
+CSV-redigeraren kan lägga till kolumner och ta bort en kolumn efter bekräftelse. Borttagning gäller hela filen, även filtrerade rader. Ångra återställer innehåll och datatyper. Tabellen behåller minst en kolumn och stöder högst 200 kolumner.

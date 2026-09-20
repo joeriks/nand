@@ -4,6 +4,62 @@ import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
 const content = '\ufeffID;Namn;Antal;Pris;Datum\r\n00123;Åsa;10;1,25;2026-09-20\r\n00456;Bertil;2;ok;20/09/2026\r\n';
+test("columns require confirmation, affect hidden rows and undo restores types and data", async ({ page }) => {
+  await localCsv(page);
+  await page.getByLabel("Datatyp för Antal").selectOption("integer");
+  await page.getByRole("button", { name: "Lägg till kolumn", exact: true }).click();
+  await page.getByLabel("Kolumnnamn", { exact: true }).fill("Kommentar");
+  await page.getByRole("button", { name: "Lägg till", exact: true }).click();
+  await page.getByLabel("Rad 1, Kommentar", { exact: true }).fill("Behåll");
+  await page.getByLabel("Filtrera ID", { exact: true }).fill("00123");
+  await page.getByRole("button", { name: "Ta bort kolumn Namn", exact: true }).click();
+  await page.getByRole("button", { name: "Avbryt", exact: true }).click();
+  await expect(page.getByLabel("Rad 1, Namn", { exact: true })).toHaveValue("Åsa");
+  await page.getByRole("button", { name: "Ta bort kolumn Namn", exact: true }).click();
+  await page.getByRole("dialog", { name: "Ta bort kolumn?", exact: true }).getByRole("button", { name: "Ta bort kolumn", exact: true }).click();
+  await expect(page.getByLabel("Datatyp för Namn")).toHaveCount(0);
+  await expect(page.getByLabel("Datatyp för Antal")).toHaveValue("integer");
+  const removed = await exported(page);
+  expect(removed.text).not.toContain("Bertil");
+  expect(removed.text).toContain("00456;2;ok;20/09/2026");
+  await page.getByRole("button", { name: "Ångra", exact: true }).click();
+  await expect(page.getByLabel("Rad 2, Namn", { exact: true })).toHaveValue("Bertil");
+  await expect(page.getByLabel("Datatyp för Antal")).toHaveValue("integer");
+  await expect(page.getByLabel("Rad 1, Kommentar", { exact: true })).toHaveValue("Behåll");
+});
+
+test("new files can be created as CSV and text", async ({ page }) => {
+  await page.goto("/"); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
+  await page.getByRole("button", { name: "Ny anteckning +", exact: true }).click();
+  await page.getByLabel("Namn och eventuell mapp").fill("New table");
+  await page.getByRole("combobox", { name: "Filtyp", exact: true }).selectOption("csv");
+  await page.getByRole("button", { name: "Skapa anteckning", exact: true }).click();
+  await expect(page.locator(".breadcrumbs")).toContainText("New table.csv");
+  await page.getByRole("button", { name: "Lägg till rad", exact: true }).click();
+  await page.getByLabel("Rad 1, Namn", { exact: true }).fill("Created");
+  await expect(page.getByLabel("Rad 1, Namn", { exact: true })).toHaveValue("Created");
+  await page.getByRole("button", { name: "Ny anteckning +", exact: true }).click();
+  await page.getByLabel("Namn och eventuell mapp").fill("Plain");
+  await page.getByRole("combobox", { name: "Filtyp", exact: true }).selectOption("txt");
+  await page.getByRole("button", { name: "Skapa anteckning", exact: true }).click();
+  await expect(page.locator(".breadcrumbs")).toContainText("Plain.txt");
+  await expect(page.getByRole("textbox", { name: "Textfilens innehåll" })).toBeEditable();
+});
+test("headerless ragged rows retain values when adding and removing columns", async ({ page }) => {
+  await localCsv(page, "ID,Value\n1\n2,Keep\n");
+  await page.getByLabel("Första raden är rubriker").uncheck();
+  await page.getByRole("button", { name: "Lägg till kolumn", exact: true }).click();
+  await page.getByRole("button", { name: "Lägg till", exact: true }).click();
+  await expect(page.getByLabel("Rad 3, Kolumn 2", { exact: true })).toHaveValue("Keep");
+  await page.getByRole("button", { name: "Ta bort kolumn Kolumn 1", exact: true }).click();
+  await page.screenshot({ path: "artifacts/csv-column-confirmation.png" });
+  await page.getByRole("dialog", { name: "Ta bort kolumn?", exact: true }).getByRole("button", { name: "Ta bort kolumn", exact: true }).click();
+  await expect(page.getByLabel("Rad 3, Kolumn 1", { exact: true })).toHaveValue("Keep");
+  await page.getByRole("button", { name: "Ta bort kolumn Kolumn 2", exact: true }).click();
+  await page.getByRole("dialog", { name: "Ta bort kolumn?", exact: true }).getByRole("button", { name: "Ta bort kolumn", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Ta bort kolumn Kolumn 1", exact: true })).toBeDisabled();
+  expect((await exported(page)).text).toBe('Value\n""\nKeep\n');
+});
 async function localCsv(page: Page, text = content, name = "data.csv") {
   await page.goto("/"); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
   await expect(page.getByLabel("Fil att importera")).toBeEnabled();

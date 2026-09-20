@@ -83,7 +83,7 @@ pub async fn choose_local_folder(app: tauri::AppHandle) -> Result<Option<FolderI
 }
 
 fn supported(path: &Path) -> bool {
-    path.extension().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("md") || s.eq_ignore_ascii_case("csv"))
+    path.extension().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("md") || s.eq_ignore_ascii_case("csv") || s.eq_ignore_ascii_case("txt"))
 }
 
 fn display_folder(path: &Path) -> String {
@@ -130,7 +130,7 @@ fn read(path: &Path) -> Result<Option<String>, String> {
 
 fn save(root: &Path, relative: &str, text: &str, expected: Option<&str>) -> Result<Saved, String> {
     if text.len() as u64 > MAX_BYTES || text.contains('\0') { return Err("Filen måste vara UTF-8-text på högst 1 MiB.".into()); }
-    if !supported(Path::new(relative)) { return Err("Endast Markdown och CSV stöds.".into()); }
+    if !supported(Path::new(relative)) { return Err("Endast Markdown, TXT och CSV stöds.".into()); }
     let path = target(root, relative)?;
     let current = read(&path)?;
     if current.as_deref() == Some(text) { return Ok(Saved { saved: true, text: current }); }
@@ -168,7 +168,7 @@ pub async fn local_snapshot(app: tauri::AppHandle, directory: Option<String>, pa
         if paths.len() > 500 { return Err("Välj högst 500 filer i samlingen.".into()); }
         let mut total = 0;
         for relative in paths {
-            if !supported(Path::new(&relative)) { return Err("Endast Markdown och CSV stöds.".into()); }
+            if !supported(Path::new(&relative)) { return Err("Endast Markdown, TXT och CSV stöds.".into()); }
             if let Some(text) = read(&target(&root, &relative)?)? {
                 total += text.len();
                 if total > 16 * 1024 * 1024 { return Err("De valda filerna är större än 16 MiB.".into()); }

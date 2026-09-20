@@ -47,7 +47,7 @@ function Directory({ path, load, selected, onInclude, onExclude }: { path: strin
       <button className="tree-file" aria-expanded={expanded.has(entry.path)} onClick={() => setExpanded(current => { const next = new Set(current); if (next.has(entry.path)) next.delete(entry.path); else next.add(entry.path); return next; })}><ChevronRight size={13} /><Folder size={16} /><span>{entry.name}</span></button>
       {expanded.has(entry.path) && <Directory path={entry.path} load={load} selected={selected} onInclude={onInclude} onExclude={onExclude} />}
     </div> : <label className="explorer-file" key={entry.path} title={entry.path}><input type="checkbox" checked={selected.has(entry.path)} disabled={busy} onChange={() => void select(entry)} aria-label={`Inkludera ${entry.path}`} /><FileText size={15} /><span>{entry.name}</span></label>)}
-    {page && page.entries.length === 0 && page.next === null && <p className="hint">Inga Markdown- eller CSV-filer här.</p>}
+    {page && page.entries.length === 0 && page.next === null && <p className="hint">Inga Markdown-, TXT- eller CSV-filer här.</p>}
     {page?.next != null && <button className="text-button" disabled={busy} onClick={() => void fetchPage()}>Visa fler</button>}
     <button className="text-button explorer-refresh" disabled={busy} onClick={() => void fetchPage(true)}>Uppdatera mappen</button>
   </div>;
