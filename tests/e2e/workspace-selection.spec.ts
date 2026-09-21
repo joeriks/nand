@@ -62,6 +62,22 @@ async function choose(page: Page, mode: "repository" | "wiki") {
 }
 const editor = (page: Page) => page.getByRole("textbox", { name: "Anteckningens innehåll" });
 
+test("the last local collection reopens instead of an older GitHub choice", async ({ page, context }) => {
+  const f = fixture(); await f.install(context); await page.goto("/");
+  await choose(page, "wiki");
+  await page.locator(".sidebar-brand button").first().click();
+  await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
+  await expect(editor(page)).toContainText("Min första anteckning");
+  await page.reload();
+  await expect(editor(page)).toContainText("Min första anteckning");
+  await expect(page.locator(".workspace-button")).toContainText("Min lokala skrivyta");
+  await page.locator(".workspace-button").click();
+  await page.getByRole("button", { name: "selection/notes · Wiki", exact: false }).click();
+  await expect(editor(page)).toContainText("wiki Alpha.md");
+  await page.reload();
+  await expect(editor(page)).toContainText("wiki Alpha.md");
+});
+
 test("last chosen Wiki and note survive reload despite newer repository cache and draft", async ({ page, context }) => {
   const f = fixture(); await f.install(context); await page.goto("/");
   await choose(page, "repository");

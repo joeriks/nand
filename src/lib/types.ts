@@ -28,6 +28,7 @@ export type CachedWorkspace = {
   workspace: Workspace;
   notes: NoteEntry[];
   checkedAt: number;
+  lastOpenedAt?: number;
   unavailable: Record<string, string>;
 };
 export function workspaceKey(workspace: Workspace): string {

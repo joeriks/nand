@@ -186,3 +186,9 @@ I Windows öppnar **Utforska rotmappen** en utforskare som listar en mapp i tage
 Lokala samlingar och repositoryfiler stöder `.md`, `.txt` och `.csv`. TXT öppnas som vanlig text. Välj **Filtyp** när du skapar en ny anteckning för att skapa Markdown, text eller en CSV-tabell; Wiki använder Markdown.
 
 CSV-redigeraren kan lägga till kolumner och ta bort en kolumn efter bekräftelse. Borttagning gäller hela filen, även filtrerade rader. Ångra återställer innehåll och datatyper. Tabellen behåller minst en kolumn och stöder högst 200 kolumner.
+
+## Samlingshistorik och fönster (0.3.6)
+
+Appen öppnar senast valda samling vid start. Klicka på samlingsnamnet för tidigare lokala mappar och GitHub-samlingar. **Öppna lokal mapp** finns direkt i sidofältet. Lokal historik sparar upp till 30 rotmappar utan att kopiera deras filer.
+
+Välj **Fler alternativ → Nytt fönster**, eller starta appen igen, för att arbeta i flera fönster. Varje fönster behåller sin egen rotmapp. Samma fil kan visas i flera fönster men är skrivskyddad i det andra så länge det första redigerar den; använd **Försök igen** efter att den släppts. Appuppdateringar installeras när övriga fönster har stängts.

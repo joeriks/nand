@@ -1,5 +1,13 @@
 # Verifieringsrapport
 
+## Senaste samling, historik och flera fönster — 0.3.6, 2026-09-21
+
+Produktionsbygge/TypeScript, ESLint, 19 enhetstester för samlingsval/synk och 39 Edge-tester för återöppning, kontoisolering, Markdown, CSV och import passerar. Webbversionens omladdning öppnar nu också den senaste lokala samlingen direkt; tidigare tester som klickade genom startsidan har anpassats till detta beteende.
+
+Windows-regressionen klarar åtta starter. Rotmappstestet öppnar samlingar via den riktiga historikdialogen, kontrollerar filer på disk, öppnar ett extra fönster via menyn och verifierar att samma fil är skrivskyddad där. Det andra fönstret byter rotmapp och laddas om utan att det första fönstrets rot ändras. Stängning av sekundärfönstret lämnar det första öppet. En andra start av samma exe öppnar också ett nytt fönster med den senast valda lokala mappen. Uppdatering blockeras innan synkningen stängs om flera fönster finns öppna.
+
+Historikdialogen är visuellt granskad. Testet använder en separat appidentitet och egna mappar; historiken förbereds i testprofilen eftersom OS-mappväljaren inte automatiseras. Rapporter: `artifacts/desktop-verification.json`, `artifacts/local-folder-verification.json`. Ingen installation över användarens app utförs av testerna.
+
 ## TXT, filskapande och CSV-kolumner — 0.3.5, 2026-09-20
 
 Godkänt: produktionsbygge/TypeScript, ESLint, 42 enhetstester för säkerhet, repository, wiki och lokala filer samt 16 olika Edge-tester för CSV och import. Filskapandet testas med CSV och TXT. TXT-import/export behåller exakta radslut och hanterar dubblettnamn. CSV-kolumntester verifierar avbruten och bekräftad borttagning, dolda rader, ångra med datatyper, nya kolumner, ojämna rader utan rubrikrad och skydd mot borttagning av sista kolumnen. Bekräftelsedialogen har granskats visuellt.

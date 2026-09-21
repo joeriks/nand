@@ -9,7 +9,7 @@ const profile = resolve(`.data/folder-verification-${Date.now()}`);
 const child = spawn(resolve("src-tauri/target/verification/release/gitbsidian.exe"), [], {
   windowsHide: true, stdio: "ignore", env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=9483", WEBVIEW2_USER_DATA_FOLDER: profile },
 });
-let browser; let config; let previousConfig;
+let browser; let config; let previousConfig; let historyPath; let previousHistory;
 try {
   for (let attempt = 0; attempt < 120; attempt++) {
     try { browser = await chromium.connectOverCDP("http://127.0.0.1:9483"); break; } catch { await new Promise(resolve => setTimeout(resolve, 250)); }
@@ -21,6 +21,8 @@ try {
   if (!initial.directory.includes("se.gitbsidian.verification")) throw Error("Refusing production folder");
   config = join(dirname(initial.directory), "local-folder.json");
   previousConfig = await readFile(config).catch(() => null);
+  historyPath = join(dirname(config), "local-folder-history.json");
+  previousHistory = await readFile(historyPath).catch(() => null);
   const folderA = resolve(profile, "Collection A"); const folderB = resolve(profile, "Collection B");
   await mkdir(folderA, { recursive: true }); await mkdir(folderB, { recursive: true });
   await mkdir(join(folderA, "Unopened"));
@@ -28,9 +30,10 @@ try {
   await writeFile(join(folderA, "Unread.md"), Buffer.from([255, 254, 0]));
   await writeFile(join(folderA, "Shared.md"), "# Collection A\n");
   await writeFile(join(folderB, "Shared.md"), "# Collection B\n");
+  await writeFile(historyPath, JSON.stringify([folderA, folderB].map(directory => ({ directory, scope: `local-folder:${directory.toLowerCase()}` }))));
   const select = async directory => {
-    await writeFile(config, JSON.stringify({ directory, scope: `local-folder:${directory.toLowerCase()}` }));
-    await page.reload();
+    await page.locator(".workspace-button").click();
+    await page.getByRole("button", { name: directory, exact: true }).click();
     await expect(page.getByRole("button", { name: "Öppna i Utforskaren" })).toHaveAttribute("title", directory);
     await page.getByText("Utforska rotmappen", { exact: true }).click();
     if (!(await page.getByRole("checkbox", { name: "Inkludera Shared.md", exact: true }).isChecked())) await page.getByRole("checkbox", { name: "Inkludera Shared.md", exact: true }).click();
@@ -106,10 +109,53 @@ try {
   await page.getByLabel("Kolumnnamn", { exact: true }).fill("Extra");
   await page.getByRole("button", { name: "Lägg till", exact: true }).click();
   await expect.poll(() => readFile(join(folderA, "Created.csv"), "utf8").catch(() => "")).toContain("Namn,Värde,Extra");
-  await writeFile("artifacts/local-folder-verification.json", JSON.stringify({ result: "passed", checkedAt: new Date().toISOString(), checks: ["persisted root selection", "separate drafts with same filename", "direct filesystem writes", "external edits of selected files; new CSV requires explicit inclusion", "1005 unopened directories do not block selected files", "invalid unselected file does not block selection", "persistent exclusion without disk deletion", "stale directory save rejected", "reload and return to former root"], nativePickerAutomated: false }, null, 2));
+  await page.locator(".workspace-button").click();
+  await expect(page.getByRole("button", { name: folderA, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: folderB, exact: true })).toBeVisible();
+  await page.screenshot({ path: "artifacts/collection-history.png" });
+  await page.keyboard.press("Escape");
+  await page.getByLabel("Fler alternativ").click();
+  await page.getByRole("button", { name: "Nytt fönster", exact: true }).click();
+  let second;
+  await expect.poll(async () => {
+    const pages = browser.contexts().flatMap(context => context.pages());
+    second = pages.find(candidate => candidate !== page);
+    return !!second;
+  }, { timeout: 15000 }).toBe(true);
+  await expect(second.getByLabel("Fil att importera")).toBeEnabled();
+  await expect(second.getByLabel("Rad 1, Namn", { exact: true })).not.toBeEditable();
+  await expect(page.getByLabel("Rad 1, Namn", { exact: true })).toBeEditable();
+  await second.locator(".workspace-button").click();
+  await second.getByRole("button", { name: folderB, exact: true }).click();
+  await expect(second.getByRole("button", { name: "Öppna i Utforskaren" })).toHaveAttribute("title", folderB);
+  await expect(page.getByRole("button", { name: "Öppna i Utforskaren" })).toHaveAttribute("title", folderA);
+  const firstRoot = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("local_folder_info"));
+  expect(firstRoot.directory).toBe(folderA);
+  const updateBlocked = await page.evaluate(async () => { try { await window.__TAURI_INTERNALS__.invoke("prepare_app_update"); return false; } catch { return true; } });
+  expect(updateBlocked).toBe(true);
+  await second.reload();
+  await expect(second.getByRole("button", { name: "Öppna i Utforskaren" })).toHaveAttribute("title", folderB);
+  await second.evaluate(() => window.__TAURI_INTERNALS__.invoke("plugin:window|close", { label: window.__TAURI_INTERNALS__.metadata.currentWindow.label }));
+  try { await expect.poll(() => second.isClosed(), { timeout: 15000 }).toBe(true); }
+  catch (error) { console.log(await second.locator("body").innerText()); await second.screenshot({ path: "artifacts/multiwindow-close-failure.png" }); throw error; }
+  await expect(page.getByLabel("Rad 1, Namn", { exact: true })).toHaveValue("Native CSV");
+  const launchedAgain = spawn(resolve("src-tauri/target/verification/release/gitbsidian.exe"), [], { windowsHide: true, stdio: "ignore", env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: profile } });
+  const secondLaunchExit = new Promise(resolveExit => launchedAgain.once("exit", resolveExit));
+  let third;
+  await expect.poll(() => {
+    third = browser.contexts().flatMap(context => context.pages()).find(candidate => candidate !== page && !candidate.isClosed());
+    return !!third;
+  }, { timeout: 15000 }).toBe(true);
+  await expect(third.getByLabel("Fil att importera")).toBeEnabled();
+  await expect(third.getByRole("button", { name: "Öppna i Utforskaren" })).toHaveAttribute("title", folderB);
+  await secondLaunchExit;
+  await third.evaluate(() => window.__TAURI_INTERNALS__.invoke("plugin:window|close", { label: window.__TAURI_INTERNALS__.metadata.currentWindow.label }));
+  await expect.poll(() => third.isClosed(), { timeout: 15000 }).toBe(true);
+  await writeFile("artifacts/local-folder-verification.json", JSON.stringify({ result: "passed", checkedAt: new Date().toISOString(), checks: ["collection history UI selection", "multiple windows retain separate roots", "same file is read-only in second window", "secondary window close preserves first window", "second executable launch opens new window with last root", "updater blocks while multiple windows are open", "persisted root selection", "separate drafts with same filename", "direct filesystem writes", "external edits of selected files; new CSV requires explicit inclusion", "1005 unopened directories do not block selected files", "invalid unselected file does not block selection", "persistent exclusion without disk deletion", "stale directory save rejected", "reload and return to former root"], nativePickerAutomated: false }, null, 2));
   console.log("Local folder selection, persistence, isolation and direct filesystem checks passed.");
 } finally {
   child.kill(); await browser?.close().catch(() => {});
+  if (historyPath) { if (previousHistory) await writeFile(historyPath, previousHistory); else await rm(historyPath, { force: true }); }
   if (config) {
     if (previousConfig) await writeFile(config, previousConfig);
     else await rm(config, { force: true }); // exact file in the validated verification app directory

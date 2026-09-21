@@ -193,10 +193,10 @@ try {
   await app.page.screenshot({ path: "artifacts/tauri-desktop.png" });
   await app.page.getByRole("button", { name: "Logga ut", exact: true }).click();
   await app.page.getByRole("dialog").getByRole("button", { name: "Logga ut", exact: true }).click();
-  await expect(app.page.locator(".workspace-button")).toContainText("Min lokala skrivyta");
+  await expect(app.page.locator(".workspace-button")).toContainText("Bara på den här enheten");
   await close(app); app = undefined;
   app = await launch();
-  await expect(app.page.locator(".workspace-button")).toContainText("Min lokala skrivyta");
+  await expect(app.page.locator(".workspace-button")).toContainText("Bara på den här enheten");
   expect(errors).toEqual([]);
   await close(app); app = undefined;
   await writeFile("artifacts/desktop-verification.json", JSON.stringify({ version, checkedAt: new Date().toISOString(), identity: verificationIdentity, firstReadyMs, secondReadyMs, checks: ["ordinary local files: migration buffer, folder link, external CSV discovery and edit, disk persistence on close and offline, native write conflict and path traversal guards", "bundled local UI in separate verification release build", "native RPC and Git capability", "no token in WebView", "Markdown preview", "close flush and restart persistence", "offline editing", "workspace dialog", "CSV import, conservative types, manual type validation, sorted editing and offline restart persistence", "synthetic downloaded workspace with no valid credential", "offline navigation after native restart and durable queue", "last explicit Wiki selection and read-only selected note survive offline restart despite newer repository cache", "switching back to repository preserves branch, root and queued draft on offline restart", "explicit logout stays revoked on restart"], github: "synthetic cache; no live GitHub authentication or writes; user's credentials and backend settings isolated by app identifier", errors }, null, 2));

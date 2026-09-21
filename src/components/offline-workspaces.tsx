@@ -8,7 +8,7 @@ export function OfflineWorkspaces({ user, onOpen }: { user: User; onOpen: (opene
   const [error, setError] = useState("");
   useEffect(() => {
     let disposed = false;
-    listWorkspaces(String(user.id)).then(items => { if (!disposed) setItems(items); }).catch(() => { if (!disposed) setError("Kunde inte läsa hämtade arbetsytor."); });
+    listWorkspaces(String(user.id)).then(items => { if (!disposed) setItems(items.sort((a, b) => (b.lastOpenedAt || 0) - (a.lastOpenedAt || 0))); }).catch(() => { if (!disposed) setError("Kunde inte läsa hämtade arbetsytor."); });
     return () => { disposed = true; };
   }, [user.id]);
   return <div className="cached-workspaces"><p>Lokala arbetsytor för @{user.login}. Du kan öppna dem även när inloggningen har gått ut.</p>{items.map(item => <button key={item.key} onClick={() => onOpen({ id: "", workspace: item.workspace, notes: item.notes })}>{item.workspace.repository.fullName} · {item.workspace.mode === "wiki" ? "Wiki" : `${item.workspace.branch}/${item.workspace.root}`} · {item.notes.length} anteckningar</button>)}{error && <p role="alert">{error}</p>}</div>;

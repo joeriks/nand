@@ -18,6 +18,19 @@ struct Runtime { backend: Option<Backend>, session: Option<Value>, loaded: bool,
 #[derive(Default)]
 struct AppState(Mutex<Runtime>);
 
+#[tauri::command]
+async fn new_app_window(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_WINDOW: AtomicU64 = AtomicU64::new(1);
+    let runtime = state.0.lock().await;
+    if runtime.updating { return Err(error("Vänta tills uppdateringen är klar.")); }
+    let label = format!("editor-{}", NEXT_WINDOW.fetch_add(1, Ordering::Relaxed));
+    tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::App("index.html".into()))
+        .title("nand — Notes and more").inner_size(1250.0, 830.0).min_inner_size(760.0, 540.0)
+        .build().map_err(|_| error("Kunde inte öppna ett nytt fönster."))?;
+    Ok(())
+}
+
 fn error(message: &str) -> String { message.to_owned() }
 fn credential(app: &tauri::AppHandle) -> Result<keyring::Entry, String> {
     // Match the app's data namespace, including separately identified verification builds.
@@ -106,8 +119,9 @@ async fn export_markdown(app: tauri::AppHandle, name: String, text: String) -> R
 }
 
 #[tauri::command]
-async fn prepare_app_update(state: State<'_, AppState>) -> Result<(), String> {
+async fn prepare_app_update(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let mut runtime = state.0.lock().await;
+    if app.webview_windows().len() > 1 { return Err(error("Stäng de andra nand-fönstren innan du installerar uppdateringen. Deras arbete sparas när de stängs.")); }
     if let Some(backend) = runtime.backend.as_mut() {
         backend._child.kill().await.map_err(|_| error("Kunde inte stänga synkningen inför uppdateringen."))?;
     }
@@ -124,12 +138,16 @@ async fn resume_after_update_error(state: State<'_, AppState>) -> Result<(), Str
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| { if let Some(window) = app.get_webview_window("main") { let _ = window.unminimize(); let _ = window.set_focus(); } }))
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move { let _ = new_app_window(app.clone(), app.state::<AppState>()).await; });
+        }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![backend_request, export_markdown, prepare_app_update, resume_after_update_error, crate::local_files::local_folder_info, crate::local_files::choose_local_folder, crate::local_files::local_list_directory, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::open_local_folder])
+        .on_window_event(|window, event| { if matches!(event, tauri::WindowEvent::Destroyed) { crate::local_files::forget_window(window.label()); } })
+        .invoke_handler(tauri::generate_handler![new_app_window, backend_request, export_markdown, prepare_app_update, resume_after_update_error, crate::local_files::local_folder_info, crate::local_files::choose_local_folder, crate::local_files::local_folder_history, crate::local_files::open_recent_local_folder, crate::local_files::local_list_directory, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::open_local_folder])
         .run(tauri::generate_context!())
         .expect("Appen kunde inte startas");
 }

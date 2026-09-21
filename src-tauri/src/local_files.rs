@@ -1,11 +1,24 @@
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Write, path::{Component, Path, PathBuf}, sync::Mutex, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::HashMap, fs, io::Write, path::{Component, Path, PathBuf}, sync::{LazyLock, Mutex}, time::{SystemTime, UNIX_EPOCH}};
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_dialog::DialogExt;
 
 const MAX_BYTES: u64 = 1024 * 1024;
 static FILE_LOCK: Mutex<()> = Mutex::new(());
+static WINDOW_FOLDERS: LazyLock<Mutex<HashMap<String, FolderInfo>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub fn forget_window(label: &str) {
+    if let Ok(mut folders) = WINDOW_FOLDERS.lock() { folders.remove(label); }
+}
+
+fn window_folder_info(app: &tauri::AppHandle, label: &str) -> Result<FolderInfo, String> {
+    let mut folders = WINDOW_FOLDERS.lock().map_err(|_| "Kunde inte läsa fönstrets mapp.")?;
+    if let Some(info) = folders.get(label) { return Ok(info.clone()); }
+    let info = folder_info(app)?;
+    folders.insert(label.to_owned(), info.clone());
+    Ok(info)
+}
 
 #[derive(Serialize)]
 pub struct LocalFile { path: String, text: String }
@@ -13,7 +26,7 @@ pub struct LocalFile { path: String, text: String }
 pub struct Snapshot { directory: String, files: Vec<LocalFile> }
 #[derive(Serialize)]
 pub struct Saved { saved: bool, text: Option<String> }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct FolderInfo { directory: String, scope: String }
 
 fn default_folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -43,8 +56,8 @@ fn folder_info(app: &tauri::AppHandle) -> Result<FolderInfo, String> {
     }
 }
 
-fn folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let info = folder_info(app)?;
+fn folder(app: &tauri::AppHandle, label: &str) -> Result<PathBuf, String> {
+    let info = window_folder_info(app, label)?;
     let path = PathBuf::from(info.directory);
     // Never recreate a missing selected folder (for example a disconnected drive).
     if info.scope == "local-notebook" { fs::create_dir_all(&path).map_err(|_| "Kunde inte skapa den lokala nand-mappen.")?; }
@@ -59,26 +72,71 @@ fn check_directory(root: &Path, expected: Option<&str>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn local_folder_info(app: tauri::AppHandle) -> Result<FolderInfo, String> { folder_info(&app) }
+pub fn local_folder_info(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<FolderInfo, String> { window_folder_info(&app, window.label()) }
+
+fn history_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(config_path(app)?.with_file_name("local-folder-history.json"))
+}
+
+fn folder_history(app: &tauri::AppHandle) -> Result<Vec<FolderInfo>, String> {
+    let mut items: Vec<FolderInfo> = match fs::read(history_path(app)?) {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|_| "Mapphistoriken kunde inte läsas.")?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(_) => return Err("Mapphistoriken kunde inte läsas.".into()),
+    };
+    if let Ok(current) = folder_info(app) {
+        items.retain(|item| !item.directory.eq_ignore_ascii_case(&current.directory));
+        items.insert(0, current);
+    }
+    items.truncate(30);
+    Ok(items)
+}
 
 #[tauri::command]
-pub async fn choose_local_folder(app: tauri::AppHandle) -> Result<Option<FolderInfo>, String> {
+pub fn local_folder_history(app: tauri::AppHandle) -> Result<Vec<FolderInfo>, String> {
+    let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
+    folder_history(&app)
+}
+
+fn select_folder(app: &tauri::AppHandle, label: &str, path: PathBuf) -> Result<FolderInfo, String> {
+    let path = path.canonicalize().map_err(|_| "Mappen är inte tillgänglig. Anslut enheten eller välj en annan mapp.")?;
+    if !path.is_dir() { return Err("Välj en mapp.".into()); }
+    fs::read_dir(&path).map_err(|_| "Kunde inte läsa mappen.")?;
+    let directory = display_folder(&path);
+    let is_default = default_folder(app)?.canonicalize().is_ok_and(|value| value == path);
+    let info = FolderInfo { scope: if is_default { "local-notebook".into() } else { format!("local-folder:{}", directory.to_lowercase()) }, directory };
+    let mut history = folder_history(app)?;
+    history.retain(|item| !item.directory.eq_ignore_ascii_case(&info.directory));
+    history.insert(0, info.clone()); history.truncate(30);
+    let config = config_path(app)?;
+    fs::create_dir_all(config.parent().ok_or("Ogiltig inställningsmapp.")?).map_err(|_| "Kunde inte spara mappvalet.")?;
+    for (target, bytes) in [(history_path(app)?, serde_json::to_vec(&history)), (config, serde_json::to_vec(&info))] {
+        let temporary = target.with_extension("tmp");
+        fs::write(&temporary, bytes.map_err(|_| "Kunde inte spara mappvalet.")?).map_err(|_| "Kunde inte spara mappvalet.")?;
+        fs::rename(&temporary, &target).map_err(|_| "Kunde inte spara mappvalet.")?;
+    }
+    WINDOW_FOLDERS.lock().map_err(|_| "Kunde inte välja fönstrets mapp.")?.insert(label.to_owned(), info.clone());
+    Ok(info)
+}
+
+#[tauri::command]
+pub async fn open_recent_local_folder(app: tauri::AppHandle, window: tauri::WebviewWindow, directory: String) -> Result<FolderInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
+        if !folder_history(&app)?.iter().any(|item| item.directory.eq_ignore_ascii_case(&directory)) {
+            return Err("Mappen finns inte i historiken. Använd Öppna lokal mapp.".into());
+        }
+        select_folder(&app, window.label(), PathBuf::from(directory))
+    }).await.map_err(|_| "Kunde inte öppna mappen.".to_owned())?
+}
+
+#[tauri::command]
+pub async fn choose_local_folder(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<Option<FolderInfo>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let Some(selected) = app.dialog().file().set_title("Välj rotmapp för lokala filer").blocking_pick_folder() else { return Ok(None); };
-        let path = selected.into_path().map_err(|_| "Ogiltig mapp.")?.canonicalize().map_err(|_| "Kunde inte öppna mappen.")?;
-        if !path.is_dir() { return Err("Välj en mapp.".into()); }
+        let path = selected.into_path().map_err(|_| "Ogiltig mapp.")?;
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
-        fs::read_dir(&path).map_err(|_| "Kunde inte läsa mappen.")?;
-        let directory = display_folder(&path);
-        let default = default_folder(&app)?;
-        let is_default = default.canonicalize().is_ok_and(|value| value == path);
-        let info = FolderInfo { scope: if is_default { "local-notebook".into() } else { format!("local-folder:{}", directory.to_lowercase()) }, directory };
-        let config = config_path(&app)?;
-        fs::create_dir_all(config.parent().ok_or("Ogiltig inställningsmapp.")?).map_err(|_| "Kunde inte spara mappvalet.")?;
-        let temporary = config.with_extension("tmp");
-        fs::write(&temporary, serde_json::to_vec(&info).map_err(|_| "Kunde inte spara mappvalet.")?).map_err(|_| "Kunde inte spara mappvalet.")?;
-        fs::rename(&temporary, &config).map_err(|_| "Kunde inte spara mappvalet.")?;
-        Ok(Some(info))
+        select_folder(&app, window.label(), path).map(Some)
     }).await.map_err(|_| "Kunde inte välja rotmapp.".to_owned())?
 }
 
@@ -158,10 +216,10 @@ fn save(root: &Path, relative: &str, text: &str, expected: Option<&str>) -> Resu
 }
 
 #[tauri::command]
-pub async fn local_snapshot(app: tauri::AppHandle, directory: Option<String>, paths: Option<Vec<String>>) -> Result<Snapshot, String> {
+pub async fn local_snapshot(app: tauri::AppHandle, window: tauri::WebviewWindow, directory: Option<String>, paths: Option<Vec<String>>) -> Result<Snapshot, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
-        let root = folder(&app)?;
+        let root = folder(&app, window.label())?;
         check_directory(&root, directory.as_deref())?;
         let mut files = Vec::new();
         let paths = paths.unwrap_or_default();
@@ -181,18 +239,18 @@ pub async fn local_snapshot(app: tauri::AppHandle, directory: Option<String>, pa
 }
 
 #[tauri::command]
-pub async fn local_save(app: tauri::AppHandle, path: String, text: String, expected: Option<String>, directory: Option<String>) -> Result<Saved, String> {
+pub async fn local_save(app: tauri::AppHandle, window: tauri::WebviewWindow, path: String, text: String, expected: Option<String>, directory: Option<String>) -> Result<Saved, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
-        let root = folder(&app)?;
+        let root = folder(&app, window.label())?;
         check_directory(&root, directory.as_deref())?;
         save(&root, &path, &text, expected.as_deref())
     }).await.map_err(|_| "Kunde inte spara den lokala filen.")?
 }
 
 #[tauri::command]
-pub fn open_local_folder(app: tauri::AppHandle) -> Result<(), String> {
-    app.opener().open_path(display_folder(&folder(&app)?), None::<&str>).map_err(|_| "Kunde inte öppna mappen i Utforskaren.".into())
+pub fn open_local_folder(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    app.opener().open_path(display_folder(&folder(&app, window.label())?), None::<&str>).map_err(|_| "Kunde inte öppna mappen i Utforskaren.".into())
 }
 
 #[derive(Serialize)]
@@ -201,10 +259,10 @@ pub struct DirectoryEntry { path: String, name: String, folder: bool }
 pub struct DirectoryPage { entries: Vec<DirectoryEntry>, next: Option<usize> }
 
 #[tauri::command]
-pub async fn local_list_directory(app: tauri::AppHandle, directory: String, path: String, offset: Option<usize>) -> Result<DirectoryPage, String> {
+pub async fn local_list_directory(app: tauri::AppHandle, window: tauri::WebviewWindow, directory: String, path: String, offset: Option<usize>) -> Result<DirectoryPage, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa mappen.")?;
-        let root = folder(&app)?;
+        let root = folder(&app, window.label())?;
         check_directory(&root, Some(&directory))?;
         let dir = if path.is_empty() { root.clone() } else { target(&root, &path)? };
         let offset = offset.unwrap_or(0);

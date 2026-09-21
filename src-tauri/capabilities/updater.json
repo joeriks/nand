@@ -2,7 +2,7 @@
   "identifier": "desktop-updater",
   "description": "Signed updates for the desktop application.",
   "windows": [
-    "main"
+    "main", "editor-*"
   ],
   "platforms": [
     "windows"

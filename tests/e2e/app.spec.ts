@@ -19,7 +19,6 @@ test("local editing survives reload, renders Markdown safely, and exports", asyn
   expect(await page.evaluate(() => "__xss" in window)).toBe(false);
   await expect(page.locator('.markdown-preview a[href^="javascript:"]')).toHaveCount(0);
   await page.reload();
-  await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
   await expect(editor).toContainText("[[Behåll|okänd syntax]]");
   const download = page.waitForEvent("download");
   await openActions(page); await page.getByRole("button", { name: "Exportera Markdown" }).click();
@@ -54,7 +53,7 @@ test("storage failure keeps the editor visible until the user can export", async
 test("a second tab cannot overwrite an active local draft", async ({ page, context }) => {
   const editor = await localEditor(page); await editor.fill("# Första flikens utkast");
   await expect(page.getByRole("status")).toHaveText("Utkast sparat på den här enheten");
-  const second = await context.newPage(); await second.goto("/"); await second.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
+  const second = await context.newPage(); await second.goto("/");
   await expect(second.getByText("Anteckningen är skrivskyddad.", { exact: false })).toBeVisible();
   await editor.fill("# Ännu nyare text"); await expect(page.getByRole("status")).toHaveText("Utkast sparat på den här enheten");
   await page.close();

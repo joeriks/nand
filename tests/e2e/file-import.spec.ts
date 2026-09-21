@@ -92,7 +92,7 @@ test("local file picker imports Markdown without overwriting and retains exact e
   expect(await readFile((await (await download).path())!, "utf8")).toBe(content);
   await page.getByLabel("Fil att importera").setInputFiles({ name: "Import.MD", mimeType: "text/markdown", buffer: Buffer.from("# Andra kopian") });
   await expect(page.getByRole("heading", { name: "Import (2)", exact: true })).toBeVisible();
-  await page.reload(); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
+  await page.reload();
   await expect(page.getByRole("textbox", { name: "Anteckningens innehåll" })).toContainText("Andra kopian");
   await page.getByRole("navigation", { name: "Filer" }).getByTitle("Import.MD", { exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Anteckningens innehåll" })).toContainText("Åäö och [[mina länkar]]");

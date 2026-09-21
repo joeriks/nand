@@ -88,7 +88,7 @@ test("CSV preserves original values, defaults ambiguous types to text and marks 
   await page.screenshot({ path: "artifacts/csv-type-validation.png" });
   await page.getByLabel("Datatyp för Datum").selectOption("text");
   await expect(page.getByLabel("Rad 2, Datum", { exact: true })).toHaveAttribute("aria-invalid", "false");
-  await page.reload(); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
+  await page.reload();
   await expect(page.getByLabel("Datatyp för Pris")).toHaveValue("decimal");
   await expect(page.getByLabel("Datatyp för Datum")).toHaveValue("text");
   await expect(page.getByLabel("Rad 1, ID", { exact: true })).toHaveValue("00123");
@@ -111,7 +111,7 @@ test("editing a sorted and filtered CSV changes the correct source row, supports
   expect(saved.text).toContain("00123;Åsa;10;1,25;2026-09-20\r\n");
   expect(saved.text).toContain("00456;Bertil ny;3;ok;20/09/2026\r\n");
   expect(saved.text.startsWith("\ufeff")).toBe(true);
-  await page.reload(); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
+  await page.reload();
   await expect(page.getByLabel("Rad 2, Namn", { exact: true })).toHaveValue("Bertil ny");
   await page.getByRole("button", { name: "CSV-text", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "CSV-filens innehåll" })).toContainText("00456;Bertil ny;3");
@@ -192,7 +192,7 @@ test("empty single-column rows and manual integer errors survive export and reop
   await expect(page.getByLabel("Rad 2, ID", { exact: true })).toHaveValue("");
   const saved = await exported(page);
   expect(saved.text).toContain('1.5\n""\n');
-  await page.reload(); await page.getByRole("button", { name: "Prova skrivytan lokalt" }).click();
+  await page.reload();
   await expect(page.getByLabel("Rad 2, ID", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Rad 1, ID", { exact: true })).toHaveAttribute("aria-invalid", "true");
 });

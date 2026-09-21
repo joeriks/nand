@@ -20,8 +20,9 @@ export function useWorkspaceSelection(fallback: "local" | null) {
     setLocalUser(user); setOpened(null); setRestoreError(""); setRestoring(true);
     const current = () => ticket === revision.current && localAccess()?.generation === access?.generation;
     try {
-      const cached = user ? await recentWorkspace(user) : null;
-      if (current()) setOpened(cached || fallback);
+      const preferLocal = localStorage.getItem("nand-last-collection-kind") === "local";
+      const cached = user && !preferLocal ? await recentWorkspace(user) : null;
+      if (current()) setOpened(preferLocal ? "local" : cached || fallback);
     } catch (error) {
       if (current()) setRestoreError(error instanceof Error ? error.message : "Den förra arbetsytan kunde inte öppnas. Dina utkast finns kvar.");
     } finally { if (current()) setRestoring(false); }
@@ -43,9 +44,11 @@ export function useWorkspaceSelection(fallback: "local" | null) {
     const allowed = () => ticket === revision.current && localAccess()?.generation === access.generation;
     await rememberWorkspace(access.user, result, allowed);
     if (!allowed()) return;
+    localStorage.setItem("nand-last-collection-kind", "remote");
     setOpened(result); setRestoring(false); setRestoreError("");
   }, []);
   const show = useCallback((value: "local" | null) => {
+    if (value === "local") localStorage.setItem("nand-last-collection-kind", "local");
     revision.current++; setOpened(value); setRestoring(false); setRestoreError("");
   }, []);
   return { opened, localUser, restoring, restoreError, restore, open, show };

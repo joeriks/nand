@@ -15,7 +15,7 @@ function descriptor(value: unknown): Workspace {
 export async function rememberWorkspace(user: User, opened: OpenWorkspace, allowed = () => true) {
   const key = cacheKey(String(user.id), workspaceKey(opened.workspace));
   const previous = await readWorkspace(key);
-  await writeWorkspace({ key, account: String(user.id), workspace: opened.workspace, notes: opened.notes, checkedAt: opened.id ? Date.now() : previous?.checkedAt || 0, unavailable: previous?.unavailable || {} });
+  await writeWorkspace({ key, account: String(user.id), workspace: opened.workspace, notes: opened.notes, lastOpenedAt: Date.now(), checkedAt: opened.id ? Date.now() : previous?.checkedAt || 0, unavailable: previous?.unavailable || {} });
   if (!allowed()) return;
   localStorage.setItem(selectionKey(user), JSON.stringify({ version: 1, workspace: opened.workspace }));
 }
