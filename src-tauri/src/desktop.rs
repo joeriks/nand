@@ -20,14 +20,19 @@ struct AppState(Mutex<Runtime>);
 
 #[tauri::command]
 async fn new_app_window(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    open_window(app, state, None).await
+}
+
+async fn open_window(app: tauri::AppHandle, state: State<'_, AppState>, file: Option<PathBuf>) -> Result<(), String> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_WINDOW: AtomicU64 = AtomicU64::new(1);
     let runtime = state.0.lock().await;
     if runtime.updating { return Err(error("Vänta tills uppdateringen är klar.")); }
     let label = format!("editor-{}", NEXT_WINDOW.fetch_add(1, Ordering::Relaxed));
-    tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::App("index.html".into()))
+    if let Some(file) = file { crate::local_files::queue_launch_file(&label, file); }
+    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
         .title("nand — Notes and more").inner_size(1250.0, 830.0).min_inner_size(760.0, 540.0)
-        .build().map_err(|_| error("Kunde inte öppna ett nytt fönster."))?;
+        .build().map_err(|_| { crate::local_files::forget_window(&label); error("Kunde inte öppna ett nytt fönster.") })?;
     Ok(())
 }
 
@@ -136,18 +141,38 @@ async fn resume_after_update_error(state: State<'_, AppState>) -> Result<(), Str
     Ok(())
 }
 
+fn launch_paths(args: impl Iterator<Item = String>, cwd: PathBuf) -> Vec<PathBuf> {
+    args.filter(|arg| !arg.starts_with("--")).map(|arg| {
+        let path = PathBuf::from(arg);
+        if path.is_absolute() { path } else { cwd.join(path) }
+    }).collect()
+}
+
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let app = app.clone();
-            tauri::async_runtime::spawn(async move { let _ = new_app_window(app.clone(), app.state::<AppState>()).await; });
+            tauri::async_runtime::spawn(async move {
+                let files = launch_paths(args.into_iter().skip(1), PathBuf::from(cwd));
+                if files.is_empty() { let _ = new_app_window(app.clone(), app.state::<AppState>()).await; }
+                for file in files { let _ = open_window(app.clone(), app.state::<AppState>(), Some(file)).await; }
+            });
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
+        .setup(|app| {
+            let mut files = launch_paths(std::env::args_os().skip(1).map(|value| value.to_string_lossy().into_owned()), std::env::current_dir().unwrap_or_default()).into_iter();
+            if let Some(file) = files.next() { crate::local_files::queue_launch_file("main", file); }
+            let app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                for file in files { let _ = open_window(app.clone(), app.state::<AppState>(), Some(file)).await; }
+            });
+            Ok(())
+        })
         .on_window_event(|window, event| { if matches!(event, tauri::WindowEvent::Destroyed) { crate::local_files::forget_window(window.label()); } })
-        .invoke_handler(tauri::generate_handler![new_app_window, backend_request, export_markdown, prepare_app_update, resume_after_update_error, crate::local_files::local_folder_info, crate::local_files::choose_local_folder, crate::local_files::local_folder_history, crate::local_files::open_recent_local_folder, crate::local_files::local_list_directory, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::open_local_folder])
+        .invoke_handler(tauri::generate_handler![crate::local_files::take_launch_file, new_app_window, backend_request, export_markdown, prepare_app_update, resume_after_update_error, crate::local_files::local_folder_info, crate::local_files::choose_local_folder, crate::local_files::local_folder_history, crate::local_files::open_recent_local_folder, crate::local_files::local_list_directory, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::open_local_folder])
         .run(tauri::generate_context!())
         .expect("Appen kunde inte startas");
 }

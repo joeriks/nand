@@ -1,5 +1,11 @@
 # Verifieringsrapport
 
+## Direkt filöppning — 0.3.7, 2026-09-21
+
+Produktionsbygge/TypeScript och ESLint passerar. Windows-regressionen klarar åtta starter. `scripts/verify-file-opening.mjs` testar en kallstart med TXT-sökväg som innehåller mellanslag, å och &, faktisk redigering tillbaka till originalfilen, samt startargument till en redan körande app med relativa Markdown- och CSV-sökvägar. Båda filerna väljs automatiskt i egna fönster och det första fönstret behåller sitt dokument. Samma fil i ytterligare ett fönster är skrivskyddad. Saknad fil och ogiltig UTF-8 ger fel. Oredigerade filer behåller exakta originalvärden och radslut.
+
+Testerna använder en isolerad appidentitet och testmappar. Installerad Windows-filassociation/Utforskarens registerintegration ändras inte på användarens dator under testet; öppningskedjan testas genom de startargument som filassociationen använder. Resultat: `artifacts/file-opening-verification.json`. Startfönstret har granskats visuellt.
+
 ## Senaste samling, historik och flera fönster — 0.3.6, 2026-09-21
 
 Produktionsbygge/TypeScript, ESLint, 19 enhetstester för samlingsval/synk och 39 Edge-tester för återöppning, kontoisolering, Markdown, CSV och import passerar. Webbversionens omladdning öppnar nu också den senaste lokala samlingen direkt; tidigare tester som klickade genom startsidan har anpassats till detta beteende.

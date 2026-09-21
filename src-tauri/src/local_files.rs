@@ -7,9 +7,35 @@ use tauri_plugin_dialog::DialogExt;
 const MAX_BYTES: u64 = 1024 * 1024;
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 static WINDOW_FOLDERS: LazyLock<Mutex<HashMap<String, FolderInfo>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static LAUNCH_FILES: LazyLock<Mutex<HashMap<String, PathBuf>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub fn queue_launch_file(label: &str, path: PathBuf) {
+    if let Ok(mut files) = LAUNCH_FILES.lock() { files.insert(label.to_owned(), path); }
+}
+
+#[derive(Serialize)]
+pub struct LaunchFile { folder: FolderInfo, path: String }
+
+#[tauri::command]
+pub async fn take_launch_file(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<Option<LaunchFile>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let requested = LAUNCH_FILES.lock().map_err(|_| "Kunde inte läsa filvalet.")?.remove(window.label());
+        let Some(requested) = requested else { return Ok(None); };
+        let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
+        let file = requested.canonicalize().map_err(|_| "Filen finns inte eller kan inte öppnas.".to_owned())?;
+        if !file.is_file() || !supported(&file) { return Err("Öppna en TXT-, Markdown- eller CSV-fil.".into()); }
+        read(&file)?.ok_or("Filen finns inte längre.")?;
+        let parent = file.parent().ok_or("Kunde inte hitta filens mapp.")?;
+        let name = file.file_name().and_then(|name| name.to_str()).ok_or("Ogiltigt filnamn.")?.to_owned();
+        target(parent, &name)?;
+        let info = select_folder(&app, window.label(), parent.to_path_buf())?;
+        Ok(Some(LaunchFile { folder: info, path: name }))
+    }).await.map_err(|_| "Kunde inte öppna filen.".to_owned())?
+}
 
 pub fn forget_window(label: &str) {
     if let Ok(mut folders) = WINDOW_FOLDERS.lock() { folders.remove(label); }
+    if let Ok(mut files) = LAUNCH_FILES.lock() { files.remove(label); }
 }
 
 fn window_folder_info(app: &tauri::AppHandle, label: &str) -> Result<FolderInfo, String> {

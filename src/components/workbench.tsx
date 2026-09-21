@@ -25,10 +25,11 @@ const LOCAL_WORKSPACE = "local-notebook";
 const noSubscribe = () => () => {};
 const zero = () => 0;
 type ViewMode = "edit" | "split" | "preview";
-export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, onHome, desktop = false, onReconnect, localFolder, onLocalFolder }: {
+export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, onHome, desktop = false, onReconnect, localFolder, onLocalFolder, initialFile }: {
   opened: OpenWorkspace | "local"; user: User | null; dark: boolean; onTheme: () => void; onWorkspace: () => void; onLogout: () => Promise<void>; onHome: () => void;
   desktop?: boolean; onReconnect?: () => void;
   localFolder?: { directory: string; scope: string }; onLocalFolder?: (folder: { directory: string; scope: string }) => void;
+  initialFile?: string | null;
 }) {
   const [choosingFolder, setChoosingFolder] = useState(false);
   const [updatesOpen, setUpdatesOpen] = useState(false);
@@ -107,7 +108,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
       if (local && desktop) {
         localRunner = new LocalFiles({ transport: localFilesTransport(localFolder?.directory), store, account, scope, owns: key => ownedKey.current === key });
         setFiles(localRunner);
-        try { await localRunner.load(); }
+        try { await localRunner.load(); if (initialFile) await localRunner.include(initialFile); }
         catch (error) { if (!cancelled) setError(typeof error === "string" ? error : "Kunde inte öppna den lokala mappen. Utkasten finns kvar."); }
         if (cancelled) { localRunner.stop(); return; }
       }
@@ -121,14 +122,14 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
           owns: key => ownedKey.current === key, accountChanged: user => { acceptAccount(user); } });
         setSync(runner);
       }
-      const previous = localStorage.getItem(noteSelectionKey(account, scope));
+      const previous = initialFile || localStorage.getItem(noteSelectionKey(account, scope));
       const available = [...new Set([...store.values().filter(value => !value.localExcluded).map(value => value.path), ...(!local ? opened.notes.map(value => value.path) : [])])].sort((a, b) => a.localeCompare(b, "sv"));
       const path = previous && available.includes(previous) ? previous : available[0];
       setReady(true);
       if (path) setActive(draftKey(account, scope, path));
     }).catch(() => { if (!cancelled) setError("Lokal lagring kunde inte öppnas. Tillåt lagring och ladda om innan du börjar skriva."); });
     return () => { cancelled = true; runner?.stop(); localRunner?.stop(); };
-  }, [account, scope, store, local, opened, desktop, localFolder?.directory]);
+  }, [account, scope, store, local, opened, desktop, localFolder?.directory, initialFile]);
 
   useEffect(() => {
     if (!files || !ready) return;

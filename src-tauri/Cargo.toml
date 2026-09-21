@@ -1,6 +1,6 @@
 [package]
 name = "gitbsidian"
-version = "0.3.6"
+version = "0.3.7"
 description = "nand — Notes and more"
 edition = "2021"
 rust-version = "1.85"

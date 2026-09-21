@@ -192,3 +192,9 @@ CSV-redigeraren kan lägga till kolumner och ta bort en kolumn efter bekräftels
 Appen öppnar senast valda samling vid start. Klicka på samlingsnamnet för tidigare lokala mappar och GitHub-samlingar. **Öppna lokal mapp** finns direkt i sidofältet. Lokal historik sparar upp till 30 rotmappar utan att kopiera deras filer.
 
 Välj **Fler alternativ → Nytt fönster**, eller starta appen igen, för att arbeta i flera fönster. Varje fönster behåller sin egen rotmapp. Samma fil kan visas i flera fönster men är skrivskyddad i det andra så länge det första redigerar den; använd **Försök igen** efter att den släppts. Appuppdateringar installeras när övriga fönster har stängts.
+
+## Öppna en fil direkt (0.3.7)
+
+Windows-installationen registrerar nand för `.txt`, `.md` och `.csv`. Högerklicka på filen och välj **Öppna med → nand**. Välj nand som standardapp i Windows om du vill använda dubbelklick.
+
+Filen öppnas i ett eget fönster och redigeras på sin befintliga plats. Dess mapp blir rotmapp och filen inkluderas automatiskt. Detta fungerar även när nand redan körs. Ingen importkopia skapas.
