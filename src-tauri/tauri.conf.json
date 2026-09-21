@@ -26,11 +26,6 @@
     }
   },
   "bundle": {
-    "fileAssociations": [
-      { "ext": ["txt"], "name": "Text", "description": "Textfil", "mimeType": "text/plain", "role": "Editor" },
-      { "ext": ["md"], "name": "Markdown", "description": "Markdown-dokument", "mimeType": "text/markdown", "role": "Editor" },
-      { "ext": ["csv"], "name": "CSV", "description": "CSV-tabell", "mimeType": "text/csv", "role": "Editor" }
-    ],
     "active": true,
     "targets": [
       "nsis"
@@ -52,6 +47,7 @@
     ],
     "windows": {
       "nsis": {
+        "installerHooks": "installer-hooks.nsh",
         "installMode": "currentUser",
         "languages": [
           "Swedish",

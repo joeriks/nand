@@ -2,6 +2,8 @@
 
 ## Direkt filöppning — 0.3.7, 2026-09-21
 
+NSIS-installationspaketet bygger med egna Open With-registreringar för TXT, MD och CSV. Genererat installationsskript använder dessa hooks utan Tauris standardassociationer. Registreringarna har egna ProgID:n och citerade programsökvägar, och ändrar inte befintliga standardappar eller UserChoice.
+
 Produktionsbygge/TypeScript och ESLint passerar. Windows-regressionen klarar åtta starter. `scripts/verify-file-opening.mjs` testar en kallstart med TXT-sökväg som innehåller mellanslag, å och &, faktisk redigering tillbaka till originalfilen, samt startargument till en redan körande app med relativa Markdown- och CSV-sökvägar. Båda filerna väljs automatiskt i egna fönster och det första fönstret behåller sitt dokument. Samma fil i ytterligare ett fönster är skrivskyddad. Saknad fil och ogiltig UTF-8 ger fel. Oredigerade filer behåller exakta originalvärden och radslut.
 
 Testerna använder en isolerad appidentitet och testmappar. Installerad Windows-filassociation/Utforskarens registerintegration ändras inte på användarens dator under testet; öppningskedjan testas genom de startargument som filassociationen använder. Resultat: `artifacts/file-opening-verification.json`. Startfönstret har granskats visuellt.
