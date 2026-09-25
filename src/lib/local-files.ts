@@ -115,7 +115,14 @@ export class LocalFiles {
           store.update(current.key, value => ({ ...value, pending }));
           await store.flush();
           if (store.status.get(current.key) !== "stored") throw new Error("Utkastet kunde inte lagras. Filen har inte skrivits över.");
-          const result = await (/\.(png|jpe?g|gif|webp|bmp)$/i.test(current.path) && this.transport.saveImage ? this.transport.saveImage({ path: current.path, dataUrl: pending.text, expected: current.baseSha === null ? null : current.baseText }) : this.transport.save({ path: current.path, text: pending.text, expected: current.baseSha === null ? null : current.baseText }));
+          const expected = current.baseSha === null ? null : current.baseText;
+          let result: Saved;
+          if (/\.(png|jpe?g|gif|webp|bmp)$/i.test(current.path)) {
+            if (!this.transport.saveImage) throw new Error("Bildsparning saknas i denna version av appen.");
+            result = await this.transport.saveImage({ path: current.path, dataUrl: pending.text, expected });
+          } else {
+            result = await this.transport.save({ path: current.path, text: pending.text, expected });
+          }
           const value = await remote(current.path, result.text);
           store.update(current.key, latest => result.saved ? acknowledge(latest, value) : { ...latest, pending: undefined, conflict: { base: latest.baseText, remote: value } });
         });

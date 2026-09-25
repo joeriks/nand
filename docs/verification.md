@@ -1,5 +1,11 @@
 # Verifieringsrapport
 
+## Utökad bildredigering — 0.3.10, 2026-09-25
+
+Bildredigeraren har beskärning genom att dra på bilden eller ange pixelmått, valbara bildförhållanden, rotation, spegling, storleksändring, kvalitetsreglage, förhandsvisning och Ångra. Formatbyte sparas som en ny fil med rätt ändelse; originalfilen kan bara skrivas över i sitt eget format. Bilddata valideras mot faktisk filsignatur före native sparning och export.
+
+TypeScript, ESLint, 126 enhetstester och Windows-produktionskompilering passerar. `scripts/verify-images.mjs` testar beskärning, dragmarkering, formatbyte, sparning, Ångra och rotation i Edge; skärmbild: `artifacts/image-editor-verification.png`. Ett separat isolerat native-test kunde inte starta eftersom Windows Application Control blockerade Rusts test-DLL. Installerad version och OS-dialogen för Spara som har därför inte automatiserats i detta test.
+
 ## Lokala bilder — 0.3.9, 2026-09-25
 
 Lokala PNG-, JPEG-, GIF-, WebP- och BMP-filer kan öppnas direkt från Utforskaren eller inkluderas från den valda rotmappen. Bildvyn visar originalet och kan beskära med procentvärden samt konvertera till PNG, JPEG eller WebP. Ändringar sparas tillbaka atomiskt till originalfilen; Exportera bild använder den valda kodningen och rätt filändelse.

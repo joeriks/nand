@@ -120,6 +120,7 @@ Varje Wiki-anrop använder en separat tillfällig bare-klon utan checkout. Den t
 
 ## Det som fungerar nu
 
+- Lokala bilder (PNG, JPEG, GIF, WebP och BMP) kan visas och beskäras med dragmarkering eller pixelmått. Rotera, spegla, ändra storlek och förhandsvisa resultatet; spara i originalformatet eller exportera en ny PNG-, JPEG- eller WebP-fil. GIF-export skapar en stillbild.
 - CodeMirror-editor, syntaxmarkering, ångra/gör om och säkert renderad GFM-förhandsvisning.
 - Skapa, öppna och spara UTF-8-filer med svensk text och mellanslag i sökvägen.
 - Filträd, filtrering på filnamn, undermappar, Markdown-export, dator- och mobilvy samt ljust/mörkt tema.

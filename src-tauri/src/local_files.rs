@@ -188,7 +188,26 @@ fn image_data(path: &Path) -> Result<Option<String>, String> {
     let metadata = match fs::metadata(path) { Ok(value) => value, Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None), Err(_) => return Err("Kunde inte läsa bildfilen.".into()) };
     if !metadata.is_file() || metadata.len() > MAX_IMAGE_BYTES { return Err("Bildfiler måste vara högst 16 MiB.".into()); }
     let bytes = fs::read(path).map_err(|_| "Bildfilen kunde inte läsas.")?;
-    Ok(Some(format!("data:{};base64,{}", mime(path), base64(&bytes))))
+    let actual = image_mime(&bytes).ok_or("Bildformatet kunde inte läsas.")?;
+    Ok(Some(format!("data:{};base64,{}", actual, base64(&bytes))))
+}
+fn image_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") { Some("image/png") }
+    else if bytes.starts_with(b"\xff\xd8\xff") { Some("image/jpeg") }
+    else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") { Some("image/gif") }
+    else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" { Some("image/webp") }
+    else if bytes.starts_with(b"BM") { Some("image/bmp") }
+    else { None }
+}
+pub(crate) fn image_bytes(data_url: &str) -> Result<(&str, Vec<u8>), String> {
+    let (header, encoded) = data_url.split_once(',').ok_or("Ogiltig bilddata.")?;
+    let kind = header.strip_prefix("data:").and_then(|value| value.strip_suffix(";base64")).ok_or("Ogiltig bilddata.")?;
+    if !["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"].contains(&kind) { return Err("Bildformatet stöds inte.".into()); }
+    if encoded.len() > (MAX_IMAGE_BYTES as usize).div_ceil(3) * 4 + 4 { return Err("Bildfiler måste vara högst 16 MiB.".into()); }
+    let bytes = decode_base64(encoded)?;
+    if bytes.len() as u64 > MAX_IMAGE_BYTES { return Err("Bildfiler måste vara högst 16 MiB.".into()); }
+    if image_mime(&bytes) != Some(kind) { return Err("Bildens innehåll stämmer inte med valt filformat.".into()); }
+    Ok((kind, bytes))
 }
 fn decode_base64(value: &str) -> Result<Vec<u8>, String> {
     let mut out = Vec::with_capacity(value.len() * 3 / 4); let mut acc = 0u32; let mut bits = 0u8;
@@ -238,11 +257,9 @@ fn read(path: &Path) -> Result<Option<String>, String> {
 }
 
 fn save_image(root: &Path, relative: &str, data_url: &str, expected: Option<&str>) -> Result<Saved, String> {
-    let (header, encoded) = data_url.split_once(",").ok_or("Ogiltig bilddata.")?;
-    let mime_ok = ["data:image/png;base64", "data:image/jpeg;base64", "data:image/gif;base64", "data:image/webp;base64", "data:image/bmp;base64"].iter().any(|prefix| header.eq_ignore_ascii_case(prefix));
-    if !mime_ok { return Err("Bildformatet stöds inte.".into()); }
-    let bytes = decode_base64(encoded)?; if bytes.len() as u64 > MAX_IMAGE_BYTES { return Err("Bildfiler måste vara högst 16 MiB.".into()); }
+    let (kind, bytes) = image_bytes(data_url)?;
     let path = target(root, relative)?; if !is_image(&path) { return Err("Filsökvägen är inte en bild.".into()); }
+    if mime(&path) != kind { return Err("Bildformatet stämmer inte med filändelsen. Använd Spara som för att byta format.".into()); }
     let current = image_data(&path)?;
     if current.as_deref() == Some(data_url) { return Ok(Saved { saved: true, text: current }); }
     if current.as_deref() != expected { return Ok(Saved { saved: false, text: current }); }
@@ -251,13 +268,14 @@ fn save_image(root: &Path, relative: &str, data_url: &str, expected: Option<&str
     fs::write(&temporary, bytes).map_err(|_| "Kunde inte spara bildfilen. Utkastet finns kvar.")?;
     let current = image_data(&path)?;
     if current.as_deref() != expected { let _ = fs::remove_file(&temporary); return Ok(Saved { saved: false, text: current }); }
-    fs::rename(&temporary, &path).map_err(|_| "Kunde inte ersätta bildfilen. Stäng den i andra program och försök igen.")?;
+    if fs::rename(&temporary, &path).is_err() { let _ = fs::remove_file(&temporary); return Err("Kunde inte ersätta bildfilen. Stäng den i andra program och försök igen.".into()); }
     Ok(Saved { saved: true, text: Some(data_url.to_owned()) })
 }
 
 
 fn save(root: &Path, relative: &str, text: &str, expected: Option<&str>) -> Result<Saved, String> {
     if text.len() as u64 > MAX_BYTES || text.contains('\0') { return Err("Filen måste vara UTF-8-text på högst 1 MiB.".into()); }
+    if is_image(Path::new(relative)) { return Err("Bildfiler måste sparas genom bildredigeraren.".into()); }
     if !supported(Path::new(relative)) { return Err("Endast Markdown, TXT och CSV stöds.".into()); }
     let path = target(root, relative)?;
     let current = read(&path)?;
@@ -301,7 +319,7 @@ pub async fn local_snapshot(app: tauri::AppHandle, window: tauri::WebviewWindow,
             let value = if is_image(&checked) { image_data(&checked)? } else { read(&checked)? };
             if let Some(text) = value {
                 total += text.len();
-                if total > 16 * 1024 * 1024 { return Err("De valda filerna är större än 16 MiB.".into()); }
+                if total > 48 * 1024 * 1024 { return Err("De valda filerna är större än 48 MiB.".into()); }
                 files.push(LocalFile { path: relative, text });
             }
         }

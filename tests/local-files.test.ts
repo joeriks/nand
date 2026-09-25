@@ -79,6 +79,22 @@ describe("ordinary local files with a durable editing buffer", () => {
     expect(f.disk.has("note.md")).toBe(false);
     expect((await readDraft(f.key("note.md")))?.text).toBe("# Important");
   });
+  it("sends image data through the binary saver and never writes it as text", async () => {
+    const image = "data:image/png;base64,iVBORw0KGgo=";
+    const f = fixture(); f.draft("picture.png", image);
+    await f.files.tick();
+    expect(f.files.state.error).toContain("Bildsparning saknas");
+    expect(f.disk.has("picture.png")).toBe(false);
+    expect((await readDraft(f.key("picture.png")))?.text).toBe(image);
+    f.transport.saveImage = async ({ path, dataUrl, expected }) => {
+      expect(expected).toBeNull();
+      f.disk.set(path, dataUrl);
+      return { saved: true, text: dataUrl };
+    };
+    await f.files.tick();
+    expect(f.disk.get("picture.png")).toBe(image);
+    expect(dirty(f.store.get(f.key("picture.png"))!)).toBe(false);
+  });
   it("recovers a lost save reply while retaining newer edits", async () => {
     const f = fixture(); f.lose(true); f.draft("note.md", "# First save"); await f.files.tick();
     expect(f.disk.get("note.md")).toBe("# First save");
