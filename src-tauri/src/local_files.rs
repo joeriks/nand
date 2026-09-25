@@ -5,6 +5,7 @@ use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_dialog::DialogExt;
 
 const MAX_BYTES: u64 = 1024 * 1024;
+const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 static WINDOW_FOLDERS: LazyLock<Mutex<HashMap<String, FolderInfo>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 static LAUNCH_FILES: LazyLock<Mutex<HashMap<String, PathBuf>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -23,8 +24,8 @@ pub async fn take_launch_file(app: tauri::AppHandle, window: tauri::WebviewWindo
         let Some(requested) = requested else { return Ok(None); };
         let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?;
         let file = requested.canonicalize().map_err(|_| "Filen finns inte eller kan inte öppnas.".to_owned())?;
-        if !file.is_file() || !supported(&file) { return Err("Öppna en TXT-, Markdown- eller CSV-fil.".into()); }
-        read(&file)?.ok_or("Filen finns inte längre.")?;
+        if !file.is_file() || !supported(&file) { return Err("Öppna en TXT-, Markdown-, CSV- eller bildfil.".into()); }
+        if is_image(&file) { image_data(&file)?.ok_or("Filen finns inte längre.")?; } else { read(&file)?.ok_or("Filen finns inte längre.")?; }
         let parent = file.parent().ok_or("Kunde inte hitta filens mapp.")?;
         let name = file.file_name().and_then(|name| name.to_str()).ok_or("Ogiltigt filnamn.")?.to_owned();
         target(parent, &name)?;
@@ -167,7 +168,32 @@ pub async fn choose_local_folder(app: tauri::AppHandle, window: tauri::WebviewWi
 }
 
 fn supported(path: &Path) -> bool {
-    path.extension().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("md") || s.eq_ignore_ascii_case("csv") || s.eq_ignore_ascii_case("txt"))
+    path.extension().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("md") || s.eq_ignore_ascii_case("csv") || s.eq_ignore_ascii_case("txt") || is_image(path))
+}
+
+fn is_image(path: &Path) -> bool { path.extension().and_then(|s| s.to_str()).is_some_and(|s| matches!(s.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp")) }
+fn mime(path: &Path) -> &'static str { match path.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase().as_str() { "jpg" | "jpeg" => "image/jpeg", "gif" => "image/gif", "webp" => "image/webp", "bmp" => "image/bmp", _ => "image/png" } }
+fn base64(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    for chunk in bytes.chunks(3) {
+        let a = chunk[0] as usize; let b = chunk.get(1).copied().unwrap_or(0) as usize; let c = chunk.get(2).copied().unwrap_or(0) as usize;
+        out.push(TABLE[a >> 2] as char); out.push(TABLE[((a & 3) << 4) | (b >> 4)] as char);
+        out.push(if chunk.len() > 1 { TABLE[((b & 15) << 2) | (c >> 6)] as char } else { '=' });
+        out.push(if chunk.len() > 2 { TABLE[c & 63] as char } else { '=' });
+    }
+    out
+}
+fn image_data(path: &Path) -> Result<Option<String>, String> {
+    let metadata = match fs::metadata(path) { Ok(value) => value, Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None), Err(_) => return Err("Kunde inte läsa bildfilen.".into()) };
+    if !metadata.is_file() || metadata.len() > MAX_IMAGE_BYTES { return Err("Bildfiler måste vara högst 16 MiB.".into()); }
+    let bytes = fs::read(path).map_err(|_| "Bildfilen kunde inte läsas.")?;
+    Ok(Some(format!("data:{};base64,{}", mime(path), base64(&bytes))))
+}
+fn decode_base64(value: &str) -> Result<Vec<u8>, String> {
+    let mut out = Vec::with_capacity(value.len() * 3 / 4); let mut acc = 0u32; let mut bits = 0u8;
+    for byte in value.bytes() { let digit = match byte { b'A'..=b'Z' => byte - b'A', b'a'..=b'z' => byte - b'a' + 26, b'0'..=b'9' => byte - b'0' + 52, b'+' => 62, b'/' => 63, b'=' => break, b'\r' | b'\n' | b' ' => continue, _ => return Err("Ogiltig bilddata.".into()) }; acc = (acc << 6) | digit as u32; bits += 6; if bits >= 8 { bits -= 8; out.push((acc >> bits) as u8); acc &= (1 << bits) - 1; } }
+    Ok(out)
 }
 
 fn display_folder(path: &Path) -> String {
@@ -211,6 +237,24 @@ fn read(path: &Path) -> Result<Option<String>, String> {
     Ok(Some(text))
 }
 
+fn save_image(root: &Path, relative: &str, data_url: &str, expected: Option<&str>) -> Result<Saved, String> {
+    let (header, encoded) = data_url.split_once(",").ok_or("Ogiltig bilddata.")?;
+    let mime_ok = ["data:image/png;base64", "data:image/jpeg;base64", "data:image/gif;base64", "data:image/webp;base64", "data:image/bmp;base64"].iter().any(|prefix| header.eq_ignore_ascii_case(prefix));
+    if !mime_ok { return Err("Bildformatet stöds inte.".into()); }
+    let bytes = decode_base64(encoded)?; if bytes.len() as u64 > MAX_IMAGE_BYTES { return Err("Bildfiler måste vara högst 16 MiB.".into()); }
+    let path = target(root, relative)?; if !is_image(&path) { return Err("Filsökvägen är inte en bild.".into()); }
+    let current = image_data(&path)?;
+    if current.as_deref() == Some(data_url) { return Ok(Saved { saved: true, text: current }); }
+    if current.as_deref() != expected { return Ok(Saved { saved: false, text: current }); }
+    fs::create_dir_all(path.parent().ok_or("Ogiltig mapp.")?).map_err(|_| "Kunde inte skapa undermappen.")?;
+    let temporary = path.with_file_name(format!(".nand-image-{}-{}.tmp", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| "Klockfel.")?.as_nanos()));
+    fs::write(&temporary, bytes).map_err(|_| "Kunde inte spara bildfilen. Utkastet finns kvar.")?;
+    let current = image_data(&path)?;
+    if current.as_deref() != expected { let _ = fs::remove_file(&temporary); return Ok(Saved { saved: false, text: current }); }
+    fs::rename(&temporary, &path).map_err(|_| "Kunde inte ersätta bildfilen. Stäng den i andra program och försök igen.")?;
+    Ok(Saved { saved: true, text: Some(data_url.to_owned()) })
+}
+
 
 fn save(root: &Path, relative: &str, text: &str, expected: Option<&str>) -> Result<Saved, String> {
     if text.len() as u64 > MAX_BYTES || text.contains('\0') { return Err("Filen måste vara UTF-8-text på högst 1 MiB.".into()); }
@@ -252,8 +296,10 @@ pub async fn local_snapshot(app: tauri::AppHandle, window: tauri::WebviewWindow,
         if paths.len() > 500 { return Err("Välj högst 500 filer i samlingen.".into()); }
         let mut total = 0;
         for relative in paths {
-            if !supported(Path::new(&relative)) { return Err("Endast Markdown, TXT och CSV stöds.".into()); }
-            if let Some(text) = read(&target(&root, &relative)?)? {
+            if !supported(Path::new(&relative)) { return Err("Endast Markdown, TXT, CSV och bilder stöds.".into()); }
+            let checked = target(&root, &relative)?;
+            let value = if is_image(&checked) { image_data(&checked)? } else { read(&checked)? };
+            if let Some(text) = value {
                 total += text.len();
                 if total > 16 * 1024 * 1024 { return Err("De valda filerna är större än 16 MiB.".into()); }
                 files.push(LocalFile { path: relative, text });
@@ -272,6 +318,11 @@ pub async fn local_save(app: tauri::AppHandle, window: tauri::WebviewWindow, pat
         check_directory(&root, directory.as_deref())?;
         save(&root, &path, &text, expected.as_deref())
     }).await.map_err(|_| "Kunde inte spara den lokala filen.")?
+}
+
+#[tauri::command]
+pub async fn local_save_image(app: tauri::AppHandle, window: tauri::WebviewWindow, path: String, data_url: String, expected: Option<String>, directory: Option<String>) -> Result<Saved, String> {
+    tauri::async_runtime::spawn_blocking(move || { let _guard = FILE_LOCK.lock().map_err(|_| "Kunde inte låsa den lokala lagringen.")?; let root = folder(&app, window.label())?; check_directory(&root, directory.as_deref())?; save_image(&root, &path, &data_url, expected.as_deref()) }).await.map_err(|_| "Kunde inte spara bildfilen.".to_owned())?
 }
 
 #[tauri::command]

@@ -21,6 +21,7 @@ import { LocalFiles, localFilesTransport } from "@/lib/local-files";
 
 const Editor = lazy(() => import("./editor"));
 const CsvEditor = lazy(() => import("./csv-editor"));
+const ImageEditor = lazy(() => import("./image-editor"));
 const LOCAL_WORKSPACE = "local-notebook";
 const noSubscribe = () => () => {};
 const zero = () => 0;
@@ -77,6 +78,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
   const draft = store.get(active);
   const plainText = /\.txt$/i.test(draft?.path || "");
   const csv = /\.csv$/i.test(draft?.path || "");
+  const image = /\.(png|jpe?g|gif|webp|bmp)$/i.test(draft?.path || "");
   const notePath = draft?.path;
   const localStatus = store.status.get(active);
   const locked = lockedKey !== active;
@@ -282,13 +284,13 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
     if (desktop) {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("export_markdown", { name: draft.path.split("/").pop()!, text: draft.text });
+        await invoke(image ? "export_image" : "export_markdown", { name: draft.path.split("/").pop()!, ...(image ? { dataUrl: draft.text } : { text: draft.text }) });
       } catch (error) { setError(typeof error === "string" ? error : "Kunde inte exportera anteckningen. Utkastet finns kvar."); }
       return;
     }
-    const url = URL.createObjectURL(new Blob([draft.text], { type: csv ? "text/csv;charset=utf-8" : plainText ? "text/plain;charset=utf-8" : "text/markdown;charset=utf-8" }));
+    const url = image ? draft.text : URL.createObjectURL(new Blob([draft.text], { type: csv ? "text/csv;charset=utf-8" : plainText ? "text/plain;charset=utf-8" : "text/markdown;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = draft.path.split("/").pop()!; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (!image) setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async function prepareLogout() {
     await importBarrier.current;
@@ -401,7 +403,7 @@ export function Workbench({ opened, user, dark, onTheme, onWorkspace, onLogout, 
       {authExpired && <div className="inline-message">{onReconnect ? <button onClick={onReconnect}>Logga in igen med samma konto →</button> : <a href="/api/auth/login">Logga in igen med samma konto →</a>}</div>}
       {draft && locked && <div className="inline-message hint">Anteckningen är skrivskyddad. Stäng den i andra flikar. Webbläsaren måste stödja Web Locks.<button onClick={() => setLockAttempt(value => value + 1)}>Försök igen</button></div>}
       {draft?.conflict && <div className="inline-message conflict-message">{files ? "Filen har ändrats på datorn." : "Det finns en annan version på GitHub."}<button onClick={() => setCompare(true)}>Jämför versionerna</button></div>}
-      <div className="editor-and-info"><div className={`document-body mode-${plainText ? "edit" : mode}`}>
+      <div className="editor-and-info">{draft && image && <Suspense fallback={<p className="editor-loading">Öppnar bilden…</p>}><ImageEditor key={draft.key} value={draft.text} onChange={text => store.update(draft.key, current => ({ ...current, text, updatedAt: Date.now() }))} readOnly={locked || !!draft.conflict} /></Suspense>}<div className={`document-body mode-${plainText || image ? "edit" : mode} ${image ? "image-hidden" : ""}`}>
         {draft && plainText ? <section className="editor-pane" aria-label="Texteditor"><Suspense fallback={<p className="editor-loading">Öppnar textfilen…</p>}><Editor key={draft.key} value={draft.text} onChange={text => store.update(draft.key, current => ({ ...current, text, updatedAt: Date.now() }))} onSave={save} readOnly={locked || !!draft.conflict} dark={dark} format="text" label="Textfilens innehåll" /></Suspense></section> : draft && csv ? <Suspense fallback={<p className="editor-loading">Öppnar CSV-filen…</p>}>{mode === "preview" ? <section className="editor-pane"><Editor key={draft.key} value={draft.text} onChange={text => store.update(draft.key, current => ({ ...current, text, updatedAt: Date.now() }))} onSave={save} readOnly={locked || !!draft.conflict} dark={dark} format="text" /></section> : <CsvEditor key={draft.key} fileKey={draft.key} value={draft.text} onChange={text => store.update(draft.key, current => ({ ...current, text, updatedAt: Date.now() }))} readOnly={locked || !!draft.conflict} />}</Suspense> : draft ? <>{mode !== "preview" && <section className="editor-pane" aria-label="Markdown-editor"><div className="pane-label">MARKDOWN <span>Vanlig text. Alla möjligheter.</span></div><Suspense fallback={<p className="editor-loading">Öppnar skrivytan…</p>}><Editor key={draft.key} value={draft.text} onChange={text => store.update(draft.key, current => ({ ...current, text, updatedAt: Date.now() }))} onSave={save} readOnly={locked || !!draft.conflict} dark={dark} /></Suspense></section>}{mode !== "edit" && <section className="preview-pane"><div className="pane-label">FÖRHANDSVISNING <span><span className="tiny-dot" /> Live</span></div><Preview text={draft.text} /></section>}</> : <div className="empty-document"><FilePlus2 size={38} strokeWidth={1} /><h2>{ready ? "Börja med en anteckning." : "Öppnar din arbetsyta…"}</h2><p>En idé, en fråga eller något du vill minnas.</p><button className="primary" disabled={!ready} onClick={() => setNewNote(true)}>Ny anteckning <ArrowUpRight size={16} /></button></div>}
       </div>{details && <aside className="info-panel"><div className="info-heading"><Info size={16} /><h2>Om anteckningen</h2><button className="icon-button" onClick={() => setDetails(false)} aria-label="Stäng information"><X size={16} /></button></div><dl><dt>Format</dt><dd>{csv ? "CSV" : plainText ? "TXT" : "Markdown"} · UTF-8</dd><dt>Sökväg</dt><dd>{draft?.path || "—"}</dd><dt>Lagring</dt><dd>{local ? (desktop ? files?.state.directory || localFolder?.directory || "Dokument/nand" : "Den här webbläsaren") : `${wiki ? "GitHub Wiki" : "Repositoryfiler"} · ${opened.workspace.repository.fullName}`}</dd>{!local && <><dt>Gren</dt><dd>{opened.workspace.branch}</dd></>}<dt>Ord</dt><dd>{stats.words}</dd></dl><p className="hint">Lokala utkast är inte en permanent säkerhetskopia. Webbläsardata kan rensas.</p><p className="hint">Länkar, bakåtlänkar och egenskapsvyer kommer i nästa etapp.</p></aside>}</div>
       <footer className="statusbar"><span className={`save-state ${localStatus === "failed" || draft?.conflict ? "warning" : ""}`} role="status">{!online ? <WifiOff size={14} /> : busy || localStatus === "writing" ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}{draft ? status : "Redo för din nästa tanke"}</span><span className="status-stats">{!local && <span><GitBranch size={13} />{opened.workspace.branch}</span>}<span>{stats.words} ord</span><span>{stats.chars} tecken</span><span>{csv ? "CSV" : plainText ? "TXT" : "Markdown"}</span></span></footer>

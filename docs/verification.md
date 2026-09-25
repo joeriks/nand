@@ -1,5 +1,9 @@
 # Verifieringsrapport
 
+## Lokala bilder — 0.3.8, 2026-09-25
+
+Lokala PNG-, JPEG-, GIF-, WebP- och BMP-filer kan öppnas direkt från Utforskaren eller inkluderas från den valda rotmappen. Bildvyn visar originalet och kan beskära med procentvärden samt konvertera till PNG, JPEG eller WebP. Ändringar sparas tillbaka atomiskt till originalfilen; Exportera bild använder den valda kodningen och rätt filändelse.
+
 ## Direkt filöppning — 0.3.7, 2026-09-21
 
 NSIS-installationspaketet bygger med egna Open With-registreringar för TXT, MD och CSV. Genererat installationsskript använder dessa hooks utan Tauris standardassociationer. Registreringarna har egna ProgID:n och citerade programsökvägar, och ändrar inte befintliga standardappar eller UserChoice.

@@ -136,6 +136,27 @@ async fn prepare_app_update(app: tauri::AppHandle, state: State<'_, AppState>) -
 }
 
 #[tauri::command]
+async fn export_image(app: tauri::AppHandle, name: String, data_url: String) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let (header, encoded) = data_url.split_once(',').ok_or_else(|| error("Ogiltig bilddata."))?;
+        let extension = match header { "data:image/png;base64" => "png", "data:image/jpeg;base64" => "jpg", "data:image/webp;base64" => "webp", "data:image/gif;base64" => "gif", "data:image/bmp;base64" => "bmp", _ => return Err(error("Bildformatet stöds inte.")) };
+        let stem = std::path::Path::new(&name).file_stem().and_then(|v| v.to_str()).unwrap_or("bild");
+        let filename = format!("{stem}.{extension}");
+        let Some(file) = app.dialog().file().add_filter("Bild", &["png", "jpg", "jpeg", "webp", "gif", "bmp"]).set_file_name(filename).blocking_save_file() else { return Ok(false); };
+        let path = file.into_path().map_err(|_| error("Ogiltig filsökväg."))?;
+        let bytes = decode_base64(encoded)?;
+        std::fs::write(path, bytes).map_err(|_| error("Kunde inte exportera bildfilen."))?;
+        Ok(true)
+    }).await.map_err(|_| error("Kunde inte öppna fildialogen."))?
+}
+
+fn decode_base64(value: &str) -> Result<Vec<u8>, String> {
+    let mut out = Vec::with_capacity(value.len() * 3 / 4); let mut acc = 0u32; let mut bits = 0u8;
+    for byte in value.bytes() { let digit = match byte { b'A'..=b'Z' => byte - b'A', b'a'..=b'z' => byte - b'a' + 26, b'0'..=b'9' => byte - b'0' + 52, b'+' => 62, b'/' => 63, b'=' => break, b'\r' | b'\n' | b' ' => continue, _ => return Err(error("Ogiltig bilddata.")) }; acc = (acc << 6) | digit as u32; bits += 6; if bits >= 8 { bits -= 8; out.push((acc >> bits) as u8); acc &= (1 << bits) - 1; } }
+    Ok(out)
+}
+
+#[tauri::command]
 async fn resume_after_update_error(state: State<'_, AppState>) -> Result<(), String> {
     state.0.lock().await.updating = false;
     Ok(())
@@ -172,7 +193,7 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| { if matches!(event, tauri::WindowEvent::Destroyed) { crate::local_files::forget_window(window.label()); } })
-        .invoke_handler(tauri::generate_handler![crate::local_files::take_launch_file, new_app_window, backend_request, export_markdown, prepare_app_update, resume_after_update_error, crate::local_files::local_folder_info, crate::local_files::choose_local_folder, crate::local_files::local_folder_history, crate::local_files::open_recent_local_folder, crate::local_files::local_list_directory, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::open_local_folder])
+        .invoke_handler(tauri::generate_handler![crate::local_files::take_launch_file, new_app_window, backend_request, export_markdown, export_image, prepare_app_update, resume_after_update_error, crate::local_files::local_folder_info, crate::local_files::choose_local_folder, crate::local_files::local_folder_history, crate::local_files::open_recent_local_folder, crate::local_files::local_list_directory, crate::local_files::local_snapshot, crate::local_files::local_save, crate::local_files::local_save_image, crate::local_files::open_local_folder])
         .run(tauri::generate_context!())
         .expect("Appen kunde inte startas");
 }

@@ -6,10 +6,12 @@ type Saved = { saved: boolean; text: string | null };
 export type LocalFilesTransport = {
   snapshot: (paths: string[]) => Promise<Snapshot>;
   save: (input: { path: string; text: string; expected: string | null }) => Promise<Saved>;
+  saveImage?: (input: { path: string; dataUrl: string; expected: string | null }) => Promise<Saved>;
 };
 export function localFilesTransport(directory?: string): LocalFilesTransport { return {
   async snapshot(paths) { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Snapshot>("local_snapshot", { directory, paths }); },
   async save(input) { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Saved>("local_save", { ...input, directory }); },
+  async saveImage(input) { const { invoke } = await import("@tauri-apps/api/core"); return invoke<Saved>("local_save_image", { path: input.path, dataUrl: input.dataUrl, expected: input.expected, directory }); },
 }; }
 export const nativeLocalFiles = localFilesTransport();
 async function remote(path: string, text: string | null): Promise<RemoteNote> {
@@ -113,7 +115,7 @@ export class LocalFiles {
           store.update(current.key, value => ({ ...value, pending }));
           await store.flush();
           if (store.status.get(current.key) !== "stored") throw new Error("Utkastet kunde inte lagras. Filen har inte skrivits över.");
-          const result = await this.transport.save({ path: current.path, text: pending.text, expected: current.baseSha === null ? null : current.baseText });
+          const result = await (/\.(png|jpe?g|gif|webp|bmp)$/i.test(current.path) && this.transport.saveImage ? this.transport.saveImage({ path: current.path, dataUrl: pending.text, expected: current.baseSha === null ? null : current.baseText }) : this.transport.save({ path: current.path, text: pending.text, expected: current.baseSha === null ? null : current.baseText }));
           const value = await remote(current.path, result.text);
           store.update(current.key, latest => result.saved ? acknowledge(latest, value) : { ...latest, pending: undefined, conflict: { base: latest.baseText, remote: value } });
         });
